@@ -1,12 +1,28 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from './prisma';
 import { ForbiddenError } from './errors';
+import { isTrustedUser } from './trustedUsers';
 
 /**
  * Check if an IP address is blocked
+ * IMPORTANT: Trusted users are never blocked
  */
-export async function isIPBlocked(ipAddress: string): Promise<boolean> {
+export async function isIPBlocked(ipAddress: string, userId?: number): Promise<boolean> {
   if (!ipAddress) return false;
+
+  // Check if user is trusted first - trusted users are never blocked
+  if (userId) {
+    const isTrusted = await isTrustedUser(userId, ipAddress);
+    if (isTrusted) {
+      return false; // Trusted users are never blocked
+    }
+  }
+
+  // Also check IP-only whitelist
+  const isTrustedIP = await isTrustedUser(undefined, ipAddress);
+  if (isTrustedIP) {
+    return false; // Trusted IPs are never blocked
+  }
 
   try {
     const blocked = await prisma.blockedIP.findFirst({
@@ -99,16 +115,19 @@ export async function ipBlockingMiddleware(
 ) {
   try {
     const ipAddress = getClientIp(req);
+    const user = (req as any).user;
+    const apiKey = (req as any).apiKey;
+    const userId = user?.userId || apiKey?.userId;
 
     if (ipAddress) {
-      const isBlocked = await isIPBlocked(ipAddress);
+      const isBlocked = await isIPBlocked(ipAddress, userId);
       if (isBlocked) {
         // Log the blocked attempt
         const { auditFromRequest } = await import('./audit');
         await auditFromRequest(req, 'UNAUTHORIZED_ACCESS', 'SYSTEM', {
           status: 'FAILURE',
           errorMessage: 'IP address is blocked',
-          details: { ipAddress },
+          details: { ipAddress, userId },
         }).catch(console.error);
 
         throw new ForbiddenError('Access denied: IP address is blocked');

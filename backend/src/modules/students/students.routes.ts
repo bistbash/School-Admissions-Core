@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { StudentsController } from './students.controller';
 import { StudentsUploadController } from './students-upload.controller';
 import { authenticate } from '../../lib/auth';
-import { requireAPIKey, strictRateLimiter } from '../../lib/security';
+import { requireAPIKey, strictRateLimiter, fileUploadRateLimiter, requireAdmin } from '../../lib/security';
 import { validateRequest } from '../../lib/validation';
 import { z } from 'zod';
 
@@ -38,12 +38,13 @@ const updateStudentSchema = z.object({
 });
 
 // Specific routes must come BEFORE parameterized routes (/:id)
-// SECURITY: clear-all requires API key OR JWT authentication + strict rate limiting
-// This allows both external API access (via API key) and authenticated frontend users (via JWT)
-router.delete('/clear-all', strictRateLimiter, requireAPIKey, studentsController.deleteAll.bind(studentsController));
-router.post('/upload', studentsUploadController.upload.bind(studentsUploadController));
-router.post('/promote-all', studentsController.promoteAllCohorts.bind(studentsController));
-router.post('/cohorts/:cohortId/promote', studentsController.promoteCohort.bind(studentsController));
+// SECURITY: clear-all requires admin access (first registered user only)
+router.delete('/clear-all', strictRateLimiter, requireAdmin, studentsController.deleteAll.bind(studentsController));
+// File upload with special rate limiting (trusted users get higher limits)
+router.post('/upload', fileUploadRateLimiter, studentsUploadController.upload.bind(studentsUploadController));
+// Promotion endpoints - admin only (sensitive operations)
+router.post('/promote-all', requireAdmin, studentsController.promoteAllCohorts.bind(studentsController));
+router.post('/cohorts/:cohortId/promote', requireAdmin, studentsController.promoteCohort.bind(studentsController));
 router.post('/', validateRequest(createStudentSchema), studentsController.create.bind(studentsController));
 router.get('/', studentsController.getAll.bind(studentsController));
 router.get('/id-number/:idNumber', studentsController.getByIdNumber.bind(studentsController));

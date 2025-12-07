@@ -10,6 +10,7 @@ export interface CreateStudentData {
   parallel?: string;
   track?: string;
   cohortId: number;
+  academicYear?: number; // Optional - defaults to current academic year
   // Additional fields
   dateOfBirth?: Date;
   email?: string;
@@ -43,6 +44,7 @@ export interface UpdateStudentData {
   track?: string;
   cohortId?: number;
   status?: 'ACTIVE' | 'GRADUATED' | 'LEFT' | 'ARCHIVED';
+  academicYear?: number; // For class changes
   // Additional fields
   dateOfBirth?: Date;
   email?: string;
@@ -69,11 +71,99 @@ export interface UpdateStudentData {
 
 export class StudentsService {
   /**
+   * Get current academic year (defaults to current calendar year)
+   * In a real system, this might be configurable or based on a date range
+   */
+  private getCurrentAcademicYear(): number {
+    const now = new Date();
+    // Academic year typically starts in September, so if we're after September, use current year
+    // Otherwise use previous year. For simplicity, using current year as default.
+    return now.getFullYear();
+  }
+
+  /**
+   * Find or create a Class record for the given grade/parallel/track combination
+   */
+  private async findOrCreateClass(
+    grade: string,
+    parallel: string | undefined,
+    track: string | undefined,
+    academicYear: number
+  ) {
+    // Try to find existing class
+    const existingClass = await prisma.class.findUnique({
+      where: {
+        grade_parallel_track_academicYear: {
+          grade,
+          parallel: parallel || null,
+          track: track || null,
+          academicYear,
+        },
+      },
+    });
+
+    if (existingClass) {
+      return existingClass;
+    }
+
+    // Create new class if it doesn't exist
+    const className = [grade, parallel, track].filter(Boolean).join(' - ') || grade;
+    return prisma.class.create({
+      data: {
+        grade,
+        parallel: parallel || null,
+        track: track || null,
+        academicYear,
+        name: className,
+        isActive: true,
+      },
+    });
+  }
+
+  /**
+   * Get student's current class enrollment (for the current academic year)
+   */
+  async getCurrentEnrollment(studentId: number, academicYear?: number) {
+    const year = academicYear || this.getCurrentAcademicYear();
+    return prisma.enrollment.findFirst({
+      where: {
+        studentId,
+        class: {
+          academicYear: year,
+        },
+      },
+      include: {
+        class: true,
+      },
+      orderBy: {
+        enrollmentDate: 'desc',
+      },
+    });
+  }
+
+  /**
+   * Get student's enrollment history
+   */
+  async getEnrollmentHistory(studentId: number) {
+    return prisma.enrollment.findMany({
+      where: {
+        studentId,
+      },
+      include: {
+        class: true,
+      },
+      orderBy: {
+        enrollmentDate: 'desc',
+      },
+    });
+  }
+
+  /**
    * Create a new student
    */
   async create(data: CreateStudentData) {
     // Check if ID number already exists
-    const existing = await (prisma as any).student.findUnique({
+    const existing = await prisma.student.findUnique({
       where: { idNumber: data.idNumber },
     });
 
@@ -82,7 +172,7 @@ export class StudentsService {
     }
 
     // Verify cohort exists
-    const cohort = await (prisma as any).cohort.findUnique({
+    const cohort = await prisma.cohort.findUnique({
       where: { id: data.cohortId },
     });
 
@@ -90,20 +180,76 @@ export class StudentsService {
       throw new NotFoundError('Cohort');
     }
 
-    return (prisma as any).student.create({
+    const academicYear = data.academicYear || this.getCurrentAcademicYear();
+
+    // Create student
+    const student = await prisma.student.create({
       data: {
         idNumber: data.idNumber,
         firstName: data.firstName,
         lastName: data.lastName,
         gender: data.gender,
+        // Keep deprecated fields for backward compatibility during migration
         grade: data.grade,
         parallel: data.parallel,
         track: data.track,
         cohortId: data.cohortId,
         status: 'ACTIVE',
+        // Additional fields
+        dateOfBirth: data.dateOfBirth,
+        email: data.email,
+        aliyahDate: data.aliyahDate,
+        locality: data.locality,
+        address: data.address,
+        address2: data.address2,
+        locality2: data.locality2,
+        phone: data.phone,
+        mobilePhone: data.mobilePhone,
+        parent1IdNumber: data.parent1IdNumber,
+        parent1FirstName: data.parent1FirstName,
+        parent1LastName: data.parent1LastName,
+        parent1Type: data.parent1Type,
+        parent1Mobile: data.parent1Mobile,
+        parent1Email: data.parent1Email,
+        parent2IdNumber: data.parent2IdNumber,
+        parent2FirstName: data.parent2FirstName,
+        parent2LastName: data.parent2LastName,
+        parent2Type: data.parent2Type,
+        parent2Mobile: data.parent2Mobile,
+        parent2Email: data.parent2Email,
       },
+    });
+
+    // Create enrollment record
+    const classRecord = await this.findOrCreateClass(
+      data.grade,
+      data.parallel,
+      data.track,
+      academicYear
+    );
+
+    await prisma.enrollment.create({
+      data: {
+        studentId: student.id,
+        classId: classRecord.id,
+        enrollmentDate: new Date(),
+      },
+    });
+
+    // Return student with enrollment data
+    return prisma.student.findUnique({
+      where: { id: student.id },
       include: {
         cohort: true,
+        exitRecord: true,
+        enrollments: {
+          include: {
+            class: true,
+          },
+          orderBy: {
+            enrollmentDate: 'desc',
+          },
+        },
       },
     });
   }
@@ -116,14 +262,12 @@ export class StudentsService {
     grade?: string;
     cohortId?: number;
     gender?: string;
+    academicYear?: number; // Filter by academic year for current enrollment
   }) {
     const where: any = {};
     
     if (filters?.status) {
       where.status = filters.status;
-    }
-    if (filters?.grade) {
-      where.grade = filters.grade;
     }
     if (filters?.cohortId) {
       where.cohortId = filters.cohortId;
@@ -132,28 +276,91 @@ export class StudentsService {
       where.gender = filters.gender;
     }
 
-    return (prisma as any).student.findMany({
+    // If grade filter is provided, we need to filter by enrollment
+    const academicYear = filters?.academicYear || this.getCurrentAcademicYear();
+    let enrollmentFilter: any = undefined;
+    if (filters?.grade) {
+      enrollmentFilter = {
+        class: {
+          grade: filters.grade,
+          academicYear: academicYear,
+        },
+      };
+    }
+
+    const students = await prisma.student.findMany({
       where,
       include: {
         cohort: true,
         exitRecord: true,
+        enrollments: {
+          include: {
+            class: true,
+          },
+          orderBy: {
+            enrollmentDate: 'desc',
+          },
+        },
       },
       orderBy: [
         { lastName: 'asc' },
         { firstName: 'asc' },
       ],
     });
+
+    // Filter enrollments by academic year in JavaScript
+    const studentsWithFilteredEnrollments = students.map((student: any) => ({
+      ...student,
+      enrollments: student.enrollments
+        .filter((e: any) => {
+          if (filters?.grade) {
+            return e.class.academicYear === academicYear && e.class.grade === filters.grade;
+          }
+          return e.class.academicYear === academicYear;
+        })
+        .slice(0, 1), // Only get current enrollment
+    }));
+
+    // If grade filter is provided, filter students who have enrollment in that grade
+    if (filters?.grade) {
+      return studentsWithFilteredEnrollments.filter((s: any) => 
+        s.enrollments && s.enrollments.length > 0
+      );
+    }
+
+    return studentsWithFilteredEnrollments;
   }
 
   /**
    * Get student by ID
    */
-  async getById(id: number) {
-    const student = await (prisma as any).student.findUnique({
+  async getById(id: number, includeHistory: boolean = true) {
+    const student = await prisma.student.findUnique({
       where: { id },
       include: {
         cohort: true,
         exitRecord: true,
+        enrollments: includeHistory ? {
+          include: {
+            class: true,
+          },
+          orderBy: {
+            enrollmentDate: 'desc',
+          },
+        } : {
+          where: {
+            class: {
+              academicYear: this.getCurrentAcademicYear(),
+            },
+          },
+          include: {
+            class: true,
+          },
+          orderBy: {
+            enrollmentDate: 'desc',
+          },
+          take: 1,
+        },
       },
     });
 
@@ -168,11 +375,19 @@ export class StudentsService {
    * Get student by ID number
    */
   async getByIdNumber(idNumber: string) {
-    const student = await (prisma as any).student.findUnique({
+    const student = await prisma.student.findUnique({
       where: { idNumber },
       include: {
         cohort: true,
         exitRecord: true,
+        enrollments: {
+          include: {
+            class: true,
+          },
+          orderBy: {
+            enrollmentDate: 'desc',
+          },
+        },
       },
     });
 
@@ -187,7 +402,7 @@ export class StudentsService {
    * Update student
    */
   async update(id: number, data: UpdateStudentData) {
-    const student = await (prisma as any).student.findUnique({
+    const student = await prisma.student.findUnique({
       where: { id },
     });
 
@@ -197,7 +412,7 @@ export class StudentsService {
 
     // If cohort is being changed, verify it exists
     if (data.cohortId) {
-      const cohort = await (prisma as any).cohort.findUnique({
+      const cohort = await prisma.cohort.findUnique({
         where: { id: data.cohortId },
       });
 
@@ -206,12 +421,91 @@ export class StudentsService {
       }
     }
 
-    return (prisma as any).student.update({
+    // Prepare update data (excluding class-related fields that go to Enrollment)
+    const updateData: any = {};
+    if (data.firstName !== undefined) updateData.firstName = data.firstName;
+    if (data.lastName !== undefined) updateData.lastName = data.lastName;
+    if (data.gender !== undefined) updateData.gender = data.gender;
+    if (data.cohortId !== undefined) updateData.cohortId = data.cohortId;
+    if (data.status !== undefined) updateData.status = data.status;
+    if (data.dateOfBirth !== undefined) updateData.dateOfBirth = data.dateOfBirth;
+    if (data.email !== undefined) updateData.email = data.email;
+    if (data.aliyahDate !== undefined) updateData.aliyahDate = data.aliyahDate;
+    if (data.locality !== undefined) updateData.locality = data.locality;
+    if (data.address !== undefined) updateData.address = data.address;
+    if (data.address2 !== undefined) updateData.address2 = data.address2;
+    if (data.locality2 !== undefined) updateData.locality2 = data.locality2;
+    if (data.phone !== undefined) updateData.phone = data.phone;
+    if (data.mobilePhone !== undefined) updateData.mobilePhone = data.mobilePhone;
+    if (data.parent1IdNumber !== undefined) updateData.parent1IdNumber = data.parent1IdNumber;
+    if (data.parent1FirstName !== undefined) updateData.parent1FirstName = data.parent1FirstName;
+    if (data.parent1LastName !== undefined) updateData.parent1LastName = data.parent1LastName;
+    if (data.parent1Type !== undefined) updateData.parent1Type = data.parent1Type;
+    if (data.parent1Mobile !== undefined) updateData.parent1Mobile = data.parent1Mobile;
+    if (data.parent1Email !== undefined) updateData.parent1Email = data.parent1Email;
+    if (data.parent2IdNumber !== undefined) updateData.parent2IdNumber = data.parent2IdNumber;
+    if (data.parent2FirstName !== undefined) updateData.parent2FirstName = data.parent2FirstName;
+    if (data.parent2LastName !== undefined) updateData.parent2LastName = data.parent2LastName;
+    if (data.parent2Type !== undefined) updateData.parent2Type = data.parent2Type;
+    if (data.parent2Mobile !== undefined) updateData.parent2Mobile = data.parent2Mobile;
+    if (data.parent2Email !== undefined) updateData.parent2Email = data.parent2Email;
+
+    // Keep deprecated fields for backward compatibility
+    if (data.grade !== undefined) updateData.grade = data.grade;
+    if (data.parallel !== undefined) updateData.parallel = data.parallel;
+    if (data.track !== undefined) updateData.track = data.track;
+
+    // Update student
+    const updatedStudent = await prisma.student.update({
       where: { id },
-      data,
+      data: updateData,
+    });
+
+    // If class information (grade/parallel/track) is being updated, create new enrollment
+    if (data.grade !== undefined || data.parallel !== undefined || data.track !== undefined) {
+      const academicYear = data.academicYear || this.getCurrentAcademicYear();
+      const grade = data.grade !== undefined ? data.grade : student.grade;
+      const parallel = data.parallel !== undefined ? data.parallel : student.parallel;
+      const track = data.track !== undefined ? data.track : student.track;
+
+      if (grade) {
+        const classRecord = await this.findOrCreateClass(grade, parallel, track, academicYear);
+        
+        // Check if enrollment already exists for this class and year
+        const existingEnrollment = await prisma.enrollment.findFirst({
+          where: {
+            studentId: id,
+            classId: classRecord.id,
+          },
+        });
+
+        if (!existingEnrollment) {
+          // Create new enrollment record
+          await prisma.enrollment.create({
+            data: {
+              studentId: id,
+              classId: classRecord.id,
+              enrollmentDate: new Date(),
+            },
+          });
+        }
+      }
+    }
+
+    // Return updated student with enrollment data
+    return prisma.student.findUnique({
+      where: { id },
       include: {
         cohort: true,
         exitRecord: true,
+        enrollments: {
+          include: {
+            class: true,
+          },
+          orderBy: {
+            enrollmentDate: 'desc',
+          },
+        },
       },
     });
   }
@@ -225,7 +519,7 @@ export class StudentsService {
     }
 
     const numericId = Number(id);
-    const student = await (prisma as any).student.findUnique({
+    const student = await prisma.student.findUnique({
       where: { id: numericId },
     });
 
@@ -234,7 +528,7 @@ export class StudentsService {
     }
 
     // Archive instead of hard delete
-    return (prisma as any).student.update({
+    return prisma.student.update({
       where: { id: numericId },
       data: {
         status: 'ARCHIVED',
@@ -249,8 +543,8 @@ export class StudentsService {
   /**
    * Promote all students in a cohort to next grade
    */
-  async promoteCohort(cohortId: number) {
-    const cohort = await (prisma as any).cohort.findUnique({
+  async promoteCohort(cohortId: number, newAcademicYear?: number) {
+    const cohort = await prisma.cohort.findUnique({
       where: { id: cohortId },
     });
 
@@ -272,30 +566,114 @@ export class StudentsService {
       throw new ValidationError(`Cannot promote from grade ${cohort.currentGrade}`);
     }
 
+    const academicYear = newAcademicYear || this.getCurrentAcademicYear();
+
     // Update cohort's current grade
-    await (prisma as any).cohort.update({
+    await prisma.cohort.update({
       where: { id: cohortId },
       data: { currentGrade: nextGrade },
     });
 
-    // Update all active students in this cohort
-    return (prisma as any).student.updateMany({
+    // Get all active students in this cohort with their enrollments
+    const studentsRaw = await prisma.student.findMany({
       where: {
         cohortId,
         status: 'ACTIVE',
       },
-      data: {
-        grade: nextGrade,
+      include: {
+        enrollments: {
+          include: {
+            class: true,
+          },
+          orderBy: {
+            enrollmentDate: 'desc',
+          },
+        },
       },
     });
+
+    // Filter enrollments by previous academic year
+    const students = studentsRaw.map((student: any) => ({
+      ...student,
+      enrollments: student.enrollments
+        .filter((e: any) => e.class.academicYear === academicYear - 1)
+        .slice(0, 1),
+    }));
+
+    let promoted = 0;
+    let graduated = 0;
+
+    // Promote each student by creating new enrollment
+    for (const student of students) {
+      const currentEnrollment = student.enrollments?.[0];
+      if (!currentEnrollment) {
+        // No previous enrollment found, skip
+        continue;
+      }
+
+      const currentClass = currentEnrollment.class;
+      const currentGrade = currentClass.grade;
+      const nextGradeForStudent = gradeProgression[currentGrade];
+
+      if (nextGradeForStudent === undefined) {
+        // Grade not in progression - skip
+        continue;
+      }
+
+          if (nextGradeForStudent === null) {
+            // Student is in final grade - mark as graduated
+            await prisma.student.update({
+              where: { id: student.id },
+              data: { status: 'GRADUATED' },
+            });
+            graduated++;
+          } else {
+            // Create new enrollment for next grade
+            const newClass = await this.findOrCreateClass(
+              nextGradeForStudent,
+              currentClass.parallel,
+              currentClass.track,
+              academicYear
+            );
+
+            // Check if enrollment already exists
+            const existingEnrollment = await prisma.enrollment.findFirst({
+              where: {
+                studentId: student.id,
+                classId: newClass.id,
+              },
+            });
+
+            if (!existingEnrollment) {
+              await prisma.enrollment.create({
+            data: {
+              studentId: student.id,
+              classId: newClass.id,
+              enrollmentDate: new Date(),
+            },
+          });
+        }
+
+        // Update deprecated fields for backward compatibility
+        await prisma.student.update({
+          where: { id: student.id },
+          data: {
+            grade: nextGradeForStudent,
+          },
+        });
+        promoted++;
+      }
+    }
+
+    return { count: promoted + graduated, promoted, graduated };
   }
 
   /**
    * Promote all active cohorts to next grade (annual promotion on 01.09)
-   * Each student is promoted one grade based on their current grade
+   * Each student is promoted one grade based on their current enrollment
    * IMPORTANT: This processes ALL active students regardless of cohort
    */
-  async promoteAllCohorts() {
+  async promoteAllCohorts(newAcademicYear?: number) {
     const results = {
       promoted: 0,
       graduated: 0,
@@ -312,23 +690,51 @@ export class StudentsService {
       // י"ג and י"ד are not in automatic progression - they stay as is
     };
 
+    const academicYear = newAcademicYear || this.getCurrentAcademicYear();
+    const previousAcademicYear = academicYear - 1;
+
     try {
-      // Get ALL active students (not just by cohort)
-      const allActiveStudents = await (prisma as any).student.findMany({
+      // Get ALL active students with their enrollments
+      const allActiveStudents = await prisma.student.findMany({
         where: {
           status: 'ACTIVE',
         },
         include: {
           cohort: true,
+          enrollments: {
+            include: {
+              class: true,
+            },
+            orderBy: {
+              enrollmentDate: 'desc',
+            },
+          },
         },
       });
 
-      console.log(`Found ${allActiveStudents.length} active students to process`);
+      // Filter enrollments by previous academic year
+      const studentsWithPreviousEnrollment = allActiveStudents.map((student: any) => ({
+        ...student,
+        enrollments: student.enrollments
+          .filter((e: any) => e.class.academicYear === previousAcademicYear)
+          .slice(0, 1),
+      }));
 
-      // Process each student individually based on their current grade
-      for (const student of allActiveStudents) {
+      console.log(`Found ${studentsWithPreviousEnrollment.length} active students to process`);
+
+      // Process each student individually based on their current enrollment
+      for (const student of studentsWithPreviousEnrollment) {
         try {
-          const currentGrade = student.grade;
+          const currentEnrollment = student.enrollments?.[0];
+          if (!currentEnrollment) {
+            // No enrollment found for previous year - skip
+            console.log(`Skipping student ${student.id} (${student.firstName} ${student.lastName}) - no enrollment found for academic year ${previousAcademicYear}`);
+            results.skipped++;
+            continue;
+          }
+
+          const currentClass = currentEnrollment.class;
+          const currentGrade = currentClass.grade;
           const nextGrade = gradeProgression[currentGrade];
           
           if (nextGrade === undefined) {
@@ -340,15 +746,41 @@ export class StudentsService {
           
           if (nextGrade === null) {
             // Student is in final grade (י"ב) - mark as graduated
-            await (prisma as any).student.update({
+            await prisma.student.update({
               where: { id: student.id },
               data: { status: 'GRADUATED' },
             });
             console.log(`Graduated student ${student.id} (${student.firstName} ${student.lastName}) from grade ${currentGrade}`);
             results.graduated++;
           } else {
-            // Promote student to next grade
-            await (prisma as any).student.update({
+            // Create new enrollment for next grade
+            const newClass = await this.findOrCreateClass(
+              nextGrade,
+              currentClass.parallel,
+              currentClass.track,
+              academicYear
+            );
+
+            // Check if enrollment already exists
+            const existingEnrollment = await prisma.enrollment.findFirst({
+              where: {
+                studentId: student.id,
+                classId: newClass.id,
+              },
+            });
+
+            if (!existingEnrollment) {
+              await prisma.enrollment.create({
+                data: {
+                  studentId: student.id,
+                  classId: newClass.id,
+                  enrollmentDate: new Date(),
+                },
+              });
+            }
+
+            // Update deprecated fields for backward compatibility
+            await prisma.student.update({
               where: { id: student.id },
               data: { grade: nextGrade },
             });
@@ -364,8 +796,8 @@ export class StudentsService {
         }
       }
 
-      // Update all cohorts' current grade based on their students
-      const activeCohorts = await (prisma as any).cohort.findMany({
+      // Update all cohorts' current grade based on their students' current enrollments
+      const activeCohorts = await prisma.cohort.findMany({
         where: {
           isActive: true,
         },
@@ -373,19 +805,40 @@ export class StudentsService {
 
       for (const cohort of activeCohorts) {
         try {
-          const cohortStudents = await (prisma as any).student.findMany({
+          const cohortStudentsRaw = await prisma.student.findMany({
             where: {
               cohortId: cohort.id,
               status: 'ACTIVE',
             },
-            select: { grade: true },
+            include: {
+              enrollments: {
+                include: {
+                  class: true,
+                },
+                orderBy: {
+                  enrollmentDate: 'desc',
+                },
+              },
+            },
           });
 
+          // Filter enrollments by current academic year
+          const cohortStudents = cohortStudentsRaw.map((student: any) => ({
+            ...student,
+            enrollments: student.enrollments
+              .filter((e: any) => e.class.academicYear === academicYear)
+              .slice(0, 1),
+          }));
+
           if (cohortStudents.length > 0) {
-            // Find the most common grade
+            // Find the most common grade from current enrollments
             const gradeCounts: Record<string, number> = {};
             cohortStudents.forEach((s: any) => {
-              gradeCounts[s.grade] = (gradeCounts[s.grade] || 0) + 1;
+              const enrollment = s.enrollments?.[0];
+              if (enrollment) {
+                const grade = enrollment.class.grade;
+                gradeCounts[grade] = (gradeCounts[grade] || 0) + 1;
+              }
             });
 
             const grades = ['ט\'', 'י\'', 'י"א', 'י"ב', 'י"ג', 'י"ד'];
@@ -399,7 +852,7 @@ export class StudentsService {
               }
             }
 
-            await (prisma as any).cohort.update({
+            await prisma.cohort.update({
               where: { id: cohort.id },
               data: { currentGrade: mostCommonGrade },
             });
@@ -428,7 +881,7 @@ export class StudentsService {
   async deleteAll() {
     try {
       console.log('deleteAll service - starting deleteMany');
-      const result = await (prisma as any).student.deleteMany({});
+      const result = await prisma.student.deleteMany({});
       console.log(`deleteAll service - deleted ${result.count} students`);
       return {
         deleted: result.count,

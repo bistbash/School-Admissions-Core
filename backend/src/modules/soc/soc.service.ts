@@ -407,4 +407,36 @@ export class SOCService {
     const { isIPBlocked } = await import('../../lib/ipBlocking');
     return isIPBlocked(ipAddress);
   }
+
+  /**
+   * Get all trusted users
+   */
+  async getTrustedUsers() {
+    const { getTrustedUsers } = await import('../../lib/trustedUsers');
+    return getTrustedUsers();
+  }
+
+  /**
+   * Add a trusted user/IP
+   */
+  async addTrustedUser(data: {
+    userId?: number;
+    ipAddress?: string;
+    email?: string;
+    name?: string;
+    reason?: string;
+    createdBy?: number;
+    expiresAt?: Date;
+  }) {
+    const { addTrustedUser } = await import('../../lib/trustedUsers');
+    return addTrustedUser(data);
+  }
+
+  /**
+   * Remove a trusted user/IP
+   */
+  async removeTrustedUser(id: number) {
+    const { removeTrustedUser } = await import('../../lib/trustedUsers');
+    return removeTrustedUser(id);
+  }
 }

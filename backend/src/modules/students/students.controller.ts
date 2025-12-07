@@ -29,6 +29,7 @@ const updateStudentSchema = z.object({
   track: z.string().optional(),
   cohortId: z.number().int().positive().optional(),
   status: z.enum(['ACTIVE', 'GRADUATED', 'LEFT', 'ARCHIVED']).optional(),
+  academicYear: z.number().int().positive().optional(), // For class changes
 });
 
 export class StudentsController {
@@ -75,6 +76,7 @@ export class StudentsController {
         grade: req.query.grade as string,
         cohortId: req.query.cohortId ? Number(req.query.cohortId) : undefined,
         gender: req.query.gender as string,
+        academicYear: req.query.academicYear ? Number(req.query.academicYear) : undefined,
       };
 
       const students = await studentsService.getAll(filters);
@@ -190,10 +192,13 @@ export class StudentsController {
   async promoteCohort(req: Request, res: Response, next: NextFunction) {
     try {
       const cohortId = Number(req.params.cohortId);
-      const result = await studentsService.promoteCohort(cohortId);
+      const academicYear = req.body.academicYear ? Number(req.body.academicYear) : undefined;
+      const result = await studentsService.promoteCohort(cohortId, academicYear);
       res.json({
         message: 'Cohort promoted successfully',
-        updated: result.count,
+        promoted: result.promoted,
+        graduated: result.graduated,
+        total: result.promoted + result.graduated,
       });
     } catch (error) {
       next(error);
@@ -214,7 +219,8 @@ export class StudentsController {
         },
       }).catch(console.error);
       
-      const result = await studentsService.promoteAllCohorts();
+      const academicYear = req.body.academicYear ? Number(req.body.academicYear) : undefined;
+      const result = await studentsService.promoteAllCohorts(academicYear);
       
       // Log successful promotion
       await auditFromRequest(req, 'UPDATE', 'STUDENT', {

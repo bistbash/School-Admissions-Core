@@ -8,15 +8,15 @@ generator client {
 }
 
 model Department {
-  id        Int       @id @default(autoincrement())
-  name      String
-  soldiers  Soldier[]
+  id       Int       @id @default(autoincrement())
+  name     String
+  soldiers Soldier[]
 }
 
 model Role {
-  id        Int       @id @default(autoincrement())
-  name      String
-  soldiers  Soldier[]
+  id       Int       @id @default(autoincrement())
+  name     String
+  soldiers Soldier[]
 }
 
 model Soldier {
@@ -24,15 +24,18 @@ model Soldier {
   personalNumber String     @unique
   name           String
   email          String     @unique
-  password       String     // Hashed password
-  type           String     // "CONSCRIPT" or "PERMANENT"
+  password       String // Hashed password
+  type           String // "CONSCRIPT" or "PERMANENT"
   department     Department @relation(fields: [departmentId], references: [id])
   departmentId   Int
   role           Role?      @relation(fields: [roleId], references: [id])
   roleId         Int?
   isCommander    Boolean    @default(false)
+  isAdmin        Boolean    @default(false) // Admin user - first registered user becomes admin
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
+  
+  @@index([isAdmin])
 }
 
 model Room {
@@ -42,27 +45,27 @@ model Room {
 }
 
 model AuditLog {
-  id          Int       @id @default(autoincrement())
-  userId      Int?      // User who performed the action (null for unauthenticated)
-  userEmail   String?   // Email of user (for quick reference)
-  action      String    // Action type: LOGIN, LOGOUT, CREATE, UPDATE, DELETE, READ, AUTH_FAILED, etc.
-  resource    String    // Resource type: SOLDIER, DEPARTMENT, ROLE, ROOM, AUTH
-  resourceId  Int?      // ID of the affected resource (null for list operations)
-  details     String?   // JSON string with additional details
-  ipAddress   String?   // Client IP address
-  userAgent   String?   // Client user agent
-  status      String    // SUCCESS, FAILURE, ERROR
-  errorMessage String?  // Error message if status is FAILURE or ERROR
-  createdAt   DateTime  @default(now())
-  
+  id           Int      @id @default(autoincrement())
+  userId       Int? // User who performed the action (null for unauthenticated)
+  userEmail    String? // Email of user (for quick reference)
+  action       String // Action type: LOGIN, LOGOUT, CREATE, UPDATE, DELETE, READ, AUTH_FAILED, etc.
+  resource     String // Resource type: SOLDIER, DEPARTMENT, ROLE, ROOM, AUTH
+  resourceId   Int? // ID of the affected resource (null for list operations)
+  details      String? // JSON string with additional details
+  ipAddress    String? // Client IP address
+  userAgent    String? // Client user agent
+  status       String // SUCCESS, FAILURE, ERROR
+  errorMessage String? // Error message if status is FAILURE or ERROR
+  createdAt    DateTime @default(now())
+
   // SOC Analyst fields
-  incidentStatus String?  // NEW, INVESTIGATING, RESOLVED, FALSE_POSITIVE, ESCALATED
-  priority       String?  // LOW, MEDIUM, HIGH, CRITICAL
-  assignedTo     Int?     // User ID of assigned analyst
-  analystNotes   String?  // Notes from SOC analyst
+  incidentStatus String? // NEW, INVESTIGATING, RESOLVED, FALSE_POSITIVE, ESCALATED
+  priority       String? // LOW, MEDIUM, HIGH, CRITICAL
+  assignedTo     Int? // User ID of assigned analyst
+  analystNotes   String? // Notes from SOC analyst
   resolvedAt     DateTime? // When incident was resolved
-  resolvedBy     Int?     // User ID who resolved it
-  
+  resolvedBy     Int? // User ID who resolved it
+
   @@index([userId])
   @@index([action])
   @@index([resource])
@@ -74,114 +77,169 @@ model AuditLog {
 }
 
 model BlockedIP {
-  id          Int       @id @default(autoincrement())
-  ipAddress   String    @unique // Blocked IP address
-  reason      String?   // Reason for blocking
-  blockedBy   Int?      // User ID who blocked it
-  blockedAt   DateTime  @default(now())
-  expiresAt   DateTime? // Optional expiration date
-  isActive    Boolean   @default(true)
-  
+  id        Int       @id @default(autoincrement())
+  ipAddress String    @unique // Blocked IP address
+  reason    String? // Reason for blocking
+  blockedBy Int? // User ID who blocked it
+  blockedAt DateTime  @default(now())
+  expiresAt DateTime? // Optional expiration date
+  isActive  Boolean   @default(true)
+
   @@index([ipAddress])
+  @@index([isActive])
+}
+
+model TrustedUser {
+  id        Int       @id @default(autoincrement())
+  userId    Int? // User ID (if whitelisting by user)
+  ipAddress String? // IP address (if whitelisting by IP)
+  email     String? // Email address (for identification)
+  name      String? // Name/description
+  reason    String? // Reason for whitelisting (e.g., "Developer", "Admin")
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  createdBy Int? // User ID who created this whitelist entry
+  expiresAt DateTime? // Optional expiration date
+
+  @@index([userId])
+  @@index([ipAddress])
+  @@index([email])
   @@index([isActive])
 }
 
 model ApiKey {
   id          Int       @id @default(autoincrement())
   key         String    @unique // Hashed API key
-  name        String    // Name/description of the API key
-  userId      Int?      // User who created it (optional)
+  name        String // Name/description of the API key
+  userId      Int? // User who created it (optional)
   lastUsedAt  DateTime? // Last time the key was used
   expiresAt   DateTime? // Optional expiration date
   isActive    Boolean   @default(true)
   createdAt   DateTime  @default(now())
-  permissions String?   // JSON string with permissions (optional)
-  
+  permissions String? // JSON string with permissions (optional)
+
   @@index([key])
   @@index([isActive])
   @@index([userId])
 }
 
 model Cohort {
-  id          Int       @id @default(autoincrement())
-  name        String    @unique // Cohort name (e.g., "Cohort 2024")
-  startYear   Int       // Start year
-  currentGrade String   // Current grade (10th, 11th, 12th, 13th, 14th)
-  isActive    Boolean   @default(true)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  students    Student[]
-  
+  id           Int       @id @default(autoincrement())
+  name         String    @unique // Cohort name (e.g., "Cohort 2024")
+  startYear    Int // Start year
+  currentGrade String // Current grade (10th, 11th, 12th, 13th, 14th)
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  students     Student[]
+
   @@index([startYear])
   @@index([isActive])
 }
 
 model Student {
-  id              Int       @id @default(autoincrement())
-  idNumber        String    @unique // ID number
-  firstName       String    // First name
-  lastName        String    // Last name
-  gender          String    // Gender: MALE, FEMALE
-  grade           String    // Current grade
-  parallel        String?   // Parallel class (A, B, C, etc.)
-  track           String?   // Track/major
-  cohortId        Int       // Starting cohort
-  cohort          Cohort    @relation(fields: [cohortId], references: [id])
-  status          String    @default("ACTIVE") // ACTIVE, GRADUATED, LEFT, ARCHIVED
-  
+  id        Int     @id @default(autoincrement())
+  idNumber  String  @unique // ID number
+  firstName String // First name
+  lastName  String // Last name
+  gender    String // Gender: MALE, FEMALE
+  // DEPRECATED: These fields are kept for backward compatibility during migration
+  // Use Enrollment table for historical and current class tracking
+  grade     String? // Current grade (deprecated - use Enrollment)
+  parallel  String? // Parallel class (A, B, C, etc.) (deprecated - use Enrollment)
+  track     String? // Track/major (deprecated - use Enrollment)
+  cohortId  Int // Starting cohort
+  cohort    Cohort  @relation(fields: [cohortId], references: [id])
+  status    String  @default("ACTIVE") // ACTIVE, GRADUATED, LEFT, ARCHIVED
+
   // Additional fields from mashov system
-  dateOfBirth     DateTime? // Date of birth
-  email           String?   // Email
-  aliyahDate      DateTime? // Aliyah date
-  locality        String?   // Locality
-  address         String?   // Address
-  address2        String?   // Address 2
-  locality2       String?   // Locality 2
-  phone           String?   // Phone
-  mobilePhone     String?   // Mobile phone
-  
+  dateOfBirth DateTime? // Date of birth
+  email       String? // Email
+  aliyahDate  DateTime? // Aliyah date
+  locality    String? // Locality
+  address     String? // Address
+  address2    String? // Address 2
+  locality2   String? // Locality 2
+  phone       String? // Phone
+  mobilePhone String? // Mobile phone
+
   // Parent 1
-  parent1IdNumber String?   // Parent 1 ID number
-  parent1FirstName String?  // Parent 1 first name
-  parent1LastName  String?  // Parent 1 last name
-  parent1Type      String?  // Parent 1 type
-  parent1Mobile    String?  // Parent 1 mobile
-  parent1Email     String?  // Parent 1 email
-  
+  parent1IdNumber  String? // Parent 1 ID number
+  parent1FirstName String? // Parent 1 first name
+  parent1LastName  String? // Parent 1 last name
+  parent1Type      String? // Parent 1 type
+  parent1Mobile    String? // Parent 1 mobile
+  parent1Email     String? // Parent 1 email
+
   // Parent 2
-  parent2IdNumber String?   // Parent 2 ID number
-  parent2FirstName String?  // Parent 2 first name
-  parent2LastName  String?  // Parent 2 last name
-  parent2Type      String?  // Parent 2 type
-  parent2Mobile    String?  // Parent 2 mobile
-  parent2Email     String?  // Parent 2 email
-  
-  exitRecord      StudentExit?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  
+  parent2IdNumber  String? // Parent 2 ID number
+  parent2FirstName String? // Parent 2 first name
+  parent2LastName  String? // Parent 2 last name
+  parent2Type      String? // Parent 2 type
+  parent2Mobile    String? // Parent 2 mobile
+  parent2Email     String? // Parent 2 email
+
+  exitRecord  StudentExit?
+  enrollments Enrollment[] // Historical and current class enrollments
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
   @@index([idNumber])
   @@index([cohortId])
   @@index([status])
   @@index([grade])
 }
 
+model Class {
+  id           Int          @id @default(autoincrement())
+  grade        String // Grade level
+  parallel     String? // Parallel class identifier (1, 2, 3, etc. or A, B, C, etc.)
+  track        String? // Track/major
+  academicYear Int // Academic year (e.g., 2024, 2025)
+  name         String? // Optional display name (e.g., "10th Grade Class A")
+  isActive     Boolean      @default(true)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  enrollments  Enrollment[]
+
+  @@unique([grade, parallel, track, academicYear]) // Unique class instance per year
+  @@index([academicYear])
+  @@index([grade])
+  @@index([isActive])
+}
+
+model Enrollment {
+  id             Int      @id @default(autoincrement())
+  studentId      Int // Foreign key to Student
+  student        Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  classId        Int // Foreign key to Class
+  class          Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  enrollmentDate DateTime @default(now()) // Date the student was enrolled in this class
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([studentId])
+  @@index([classId])
+  @@index([enrollmentDate])
+  @@index([studentId, classId]) // For efficient lookups
+}
+
 model StudentExit {
-  id                  Int       @id @default(autoincrement())
+  id                   Int       @id @default(autoincrement())
   studentId            Int       @unique // Link to student
   student              Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
   hasLeft              Boolean   @default(true) // Has left
-  exitReason           String?   // Exit reason
-  exitCategory         String?   // Exit category
-  receivingInstitution String?   // Receiving institution
-  wasDesiredExit       Boolean?  // Was desired exit?
+  exitReason           String? // Exit reason
+  exitCategory         String? // Exit category
+  receivingInstitution String? // Receiving institution
+  wasDesiredExit       Boolean? // Was desired exit?
   exitDate             DateTime? // Exit date
   clearanceCompleted   Boolean   @default(false) // Clearance completed
   passedSupply         Boolean   @default(false) // Passed supply
   expelledFromSchool   Boolean   @default(false) // Expelled from school
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
-  
+
   @@index([studentId])
   @@index([hasLeft])
   @@index([exitDate])

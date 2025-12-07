@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { SOCController } from './soc.controller';
 import { authenticate } from '../../lib/auth';
+import { requireAdmin } from '../../lib/security';
 import { ForbiddenError } from '../../lib/errors';
 
 const router = Router();
@@ -21,9 +22,15 @@ router.get('/users/:userId/activity', socController.getUserActivity.bind(socCont
 router.get('/resources/:resource/:resourceId', socController.getResourceHistory.bind(socController));
 router.put('/incidents/:id', socController.updateIncident.bind(socController));
 router.post('/incidents/:id/mark', socController.markAsIncident.bind(socController));
-router.get('/blocked-ips', socController.getBlockedIPs.bind(socController));
-router.post('/block-ip', socController.blockIP.bind(socController));
-router.post('/unblock-ip', socController.unblockIP.bind(socController));
+// IP blocking - admin only
+router.get('/blocked-ips', requireAdmin, socController.getBlockedIPs.bind(socController));
+router.post('/block-ip', requireAdmin, socController.blockIP.bind(socController));
+router.post('/unblock-ip', requireAdmin, socController.unblockIP.bind(socController));
+
+// Trusted users management - admin only
+router.get('/trusted-users', requireAdmin, socController.getTrustedUsers.bind(socController));
+router.post('/trusted-users', requireAdmin, socController.addTrustedUser.bind(socController));
+router.delete('/trusted-users/:id', requireAdmin, socController.removeTrustedUser.bind(socController));
 
 export default router;
 

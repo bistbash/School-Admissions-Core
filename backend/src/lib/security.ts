@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { ForbiddenError, UnauthorizedError } from './errors';
 import { verifyAPIKey, getAPIKeyInfo } from './apiKeys';
 import { auditFromRequest } from './audit';
+import { isRequestFromTrustedUser } from './trustedUsers';
 import rateLimit from 'express-rate-limit';
 
 /**
@@ -126,24 +127,70 @@ export async function requireAPIKey(req: Request, res: Response, next: NextFunct
 /**
  * Middleware to check if user has admin role
  * Requires authentication first
+ * Only the first registered user (admin) can access protected endpoints
  */
-export function requireAdmin(req: Request, res: Response, next: NextFunction) {
-  const user = (req as any).user;
-  
-  if (!user) {
-    throw new UnauthorizedError('Authentication required');
-  }
+export async function requireAdmin(req: Request, res: Response, next: NextFunction) {
+  try {
+    const user = (req as any).user;
+    const apiKey = (req as any).apiKey;
+    
+    if (!user && !apiKey) {
+      throw new UnauthorizedError('Authentication required');
+    }
 
-  // TODO: Add role checking when role system is implemented
-  // For now, we'll allow authenticated users
-  // In production, you should check user.role === 'ADMIN'
-  
-  next();
+    // Get userId from user or API key
+    const userId = user?.userId || apiKey?.userId;
+    
+    if (!userId) {
+      throw new UnauthorizedError('User ID not found');
+    }
+
+    // Check if user is admin
+    const { prisma } = await import('./prisma');
+    const soldier = await prisma.soldier.findUnique({
+      where: { id: userId },
+      select: { isAdmin: true },
+    });
+
+    if (!soldier) {
+      throw new UnauthorizedError('User not found');
+    }
+
+    if (!soldier.isAdmin) {
+      // Log unauthorized admin access attempt
+      await auditFromRequest(req, 'UNAUTHORIZED_ACCESS', 'SYSTEM', {
+        status: 'FAILURE',
+        errorMessage: 'Admin access required',
+        details: {
+          endpoint: req.path,
+          method: req.method,
+          userId,
+        },
+      }).catch(console.error);
+      
+      throw new ForbiddenError('Admin access required. Only the first registered user has admin privileges.');
+    }
+
+    // Log successful admin access
+    await auditFromRequest(req, 'ADMIN_ACCESS', 'SYSTEM', {
+      status: 'SUCCESS',
+      details: {
+        endpoint: req.path,
+        method: req.method,
+        userId,
+      },
+    }).catch(console.error);
+
+    next();
+  } catch (error) {
+    next(error);
+  }
 }
 
 /**
  * Rate limiting configuration
  * Limits requests to prevent abuse
+ * Trusted users (developers/admins) are exempt from rate limiting
  */
 export const apiRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -151,6 +198,10 @@ export const apiRateLimiter = rateLimit({
   message: 'Too many requests from this IP, please try again later.',
   standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  skip: async (req: Request) => {
+    // Skip rate limiting for trusted users
+    return await isRequestFromTrustedUser(req);
+  },
   handler: async (req: Request, res: Response) => {
     // Log rate limit violation
     await auditFromRequest(req, 'RATE_LIMIT_EXCEEDED', 'SYSTEM', {
@@ -170,10 +221,15 @@ export const apiRateLimiter = rateLimit({
 
 /**
  * Strict rate limiter for sensitive operations
+ * Trusted users have higher limits but are still rate limited
  */
 export const strictRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10, // Limit each IP to 10 requests per windowMs
+  max: async (req: Request) => {
+    // Trusted users get higher limits
+    const isTrusted = await isRequestFromTrustedUser(req);
+    return isTrusted ? 100 : 10; // Trusted: 100, Regular: 10
+  },
   message: 'Too many requests from this IP, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
@@ -189,6 +245,52 @@ export const strictRateLimiter = rateLimit({
     
     res.status(429).json({
       error: 'Too many requests from this IP, please try again later.',
+    });
+  },
+});
+
+/**
+ * File upload rate limiter
+ * Allows larger files and more uploads for trusted users and admins
+ */
+export const fileUploadRateLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: async (req: Request) => {
+    // Check if user is admin
+    const user = (req as any).user;
+    let isAdmin = false;
+    if (user?.userId) {
+      const { prisma } = await import('./prisma');
+      const soldier = await prisma.soldier.findUnique({
+        where: { id: user.userId },
+        select: { isAdmin: true },
+      });
+      isAdmin = soldier?.isAdmin || false;
+    }
+    
+    // Admin: unlimited, Trusted: 100 uploads/hour, Regular: 5 uploads/hour
+    if (isAdmin) {
+      return 1000; // Effectively unlimited for admin
+    }
+    
+    const isTrusted = await isRequestFromTrustedUser(req);
+    return isTrusted ? 100 : 5; // Trusted: 100 uploads/hour, Regular: 5 uploads/hour
+  },
+  message: 'Too many file uploads. Please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: async (req: Request, res: Response) => {
+    await auditFromRequest(req, 'RATE_LIMIT_EXCEEDED', 'SYSTEM', {
+      status: 'FAILURE',
+      errorMessage: 'File upload rate limit exceeded',
+      details: {
+        endpoint: req.path,
+        method: req.method,
+      },
+    }).catch(console.error);
+    
+    res.status(429).json({
+      error: 'Too many file uploads. Please try again later.',
     });
   },
 });

@@ -4,9 +4,24 @@ import { Request, Response, NextFunction } from 'express';
 import { UnauthorizedError } from './errors';
 import { auditFromRequest } from './audit';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
+// SECURITY: Enforce strong JWT_SECRET in production
+const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 const SALT_ROUNDS = 12;
+
+if (!JWT_SECRET) {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      'CRITICAL: JWT_SECRET environment variable is required in production. ' +
+      'Generate a strong secret: openssl rand -base64 32'
+    );
+  }
+  // Development fallback (warn but allow)
+  console.warn('⚠️  WARNING: Using default JWT_SECRET. This is INSECURE for production!');
+  console.warn('⚠️  Set JWT_SECRET environment variable: openssl rand -base64 32');
+}
+
+const SECRET = JWT_SECRET || 'your-super-secret-jwt-key-change-in-production-DEVELOPMENT-ONLY';
 
 export interface JwtPayload {
   userId: number;
@@ -32,7 +47,7 @@ export async function comparePassword(password: string, hash: string): Promise<b
  * Generate a JWT token
  */
 export function generateToken(payload: JwtPayload): string {
-  return jwt.sign(payload, JWT_SECRET, {
+  return jwt.sign(payload, SECRET, {
     expiresIn: JWT_EXPIRES_IN,
   } as jwt.SignOptions);
 }
@@ -42,7 +57,7 @@ export function generateToken(payload: JwtPayload): string {
  */
 export function verifyToken(token: string): JwtPayload {
   try {
-    return jwt.verify(token, JWT_SECRET) as JwtPayload;
+    return jwt.verify(token, SECRET) as JwtPayload;
   } catch (error) {
     throw new UnauthorizedError('Invalid or expired token');
   }

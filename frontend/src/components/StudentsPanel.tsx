@@ -9,19 +9,38 @@ interface Cohort {
   isActive: boolean;
 }
 
+interface Class {
+  id: number;
+  grade: string;
+  parallel?: string;
+  track?: string;
+  academicYear: number;
+  name?: string;
+  isActive: boolean;
+}
+
+interface Enrollment {
+  id: number;
+  studentId: number;
+  classId: number;
+  enrollmentDate: string;
+  class: Class;
+}
+
 interface Student {
   id: number;
   idNumber: string;
   firstName: string;
   lastName: string;
   gender: string;
-  grade: string;
-  parallel?: string;
-  track?: string;
+  grade?: string; // Deprecated - use enrollments
+  parallel?: string; // Deprecated - use enrollments
+  track?: string; // Deprecated - use enrollments
   cohortId: number;
   status: string;
   cohort?: Cohort;
   exitRecord?: any;
+  enrollments?: Enrollment[]; // Historical and current enrollments
   // Additional fields
   dateOfBirth?: string;
   email?: string;
@@ -58,6 +77,7 @@ export function StudentsPanel() {
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadResult, setUploadResult] = useState<any>(null);
+  const [academicYear, setAcademicYear] = useState<number>(new Date().getFullYear());
   const [formData, setFormData] = useState({
     idNumber: '',
     firstName: '',
@@ -67,13 +87,46 @@ export function StudentsPanel() {
     parallel: '',
     track: '',
     cohortId: '',
+    academicYear: new Date().getFullYear(),
   });
+
+  // Helper function to get current class from enrollments
+  const getCurrentClass = (student: Student): Class | null => {
+    if (!student.enrollments || student.enrollments.length === 0) {
+      return null;
+    }
+    // Find enrollment for current academic year
+    const currentEnrollment = student.enrollments.find(
+      (e) => e.class.academicYear === academicYear
+    );
+    return currentEnrollment ? currentEnrollment.class : null;
+  };
+
+  // Helper function to get class display string
+  const getClassDisplay = (student: Student): string => {
+    const currentClass = getCurrentClass(student);
+    if (currentClass) {
+      const parts = [currentClass.grade];
+      if (currentClass.parallel) parts.push(currentClass.parallel);
+      if (currentClass.track) parts.push(currentClass.track);
+      return parts.join(' - ');
+    }
+    // Fallback to deprecated fields
+    const parts = [student.grade || '-'];
+    if (student.parallel) parts.push(student.parallel);
+    if (student.track) parts.push(student.track);
+    return parts.join(' - ');
+  };
 
   const fetchStudents = async () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await apiClient.get<Student[]>('/students');
+      const response = await apiClient.get<Student[]>('/students', {
+        params: {
+          academicYear: academicYear,
+        },
+      });
       setStudents(response.data);
     } catch (err: any) {
       setError(err?.response?.data?.error || err?.message || 'שגיאה בטעינת תלמידים');
@@ -94,7 +147,7 @@ export function StudentsPanel() {
   useEffect(() => {
     fetchStudents();
     fetchCohorts();
-  }, []);
+  }, [academicYear]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -105,6 +158,7 @@ export function StudentsPanel() {
         cohortId: Number(formData.cohortId),
         parallel: formData.parallel || undefined,
         track: formData.track || undefined,
+        academicYear: formData.academicYear,
       };
 
       await apiClient.post('/students', data);
@@ -118,6 +172,7 @@ export function StudentsPanel() {
         parallel: '',
         track: '',
         cohortId: '',
+        academicYear: academicYear,
       });
       await fetchStudents();
     } catch (err: any) {
@@ -136,6 +191,7 @@ export function StudentsPanel() {
         cohortId: formData.cohortId ? Number(formData.cohortId) : undefined,
         parallel: formData.parallel || undefined,
         track: formData.track || undefined,
+        academicYear: formData.academicYear,
       };
 
       await apiClient.put(`/students/${selectedStudent.id}`, data);
@@ -149,6 +205,7 @@ export function StudentsPanel() {
         parallel: '',
         track: '',
         cohortId: '',
+        academicYear: academicYear,
       });
       await fetchStudents();
     } catch (err: any) {
@@ -172,15 +229,17 @@ export function StudentsPanel() {
 
   const handleEdit = (student: Student) => {
     setSelectedStudent(student);
+    const currentClass = getCurrentClass(student);
     setFormData({
       idNumber: student.idNumber,
       firstName: student.firstName,
       lastName: student.lastName,
       gender: student.gender,
-      grade: student.grade,
-      parallel: student.parallel || '',
-      track: student.track || '',
+      grade: currentClass?.grade || student.grade || 'ט\'',
+      parallel: currentClass?.parallel || student.parallel || '',
+      track: currentClass?.track || student.track || '',
       cohortId: String(student.cohortId),
+      academicYear: currentClass?.academicYear || academicYear,
     });
     setShowCreateForm(true);
   };
@@ -243,6 +302,22 @@ export function StudentsPanel() {
           <h2 className="text-2xl font-bold text-gray-900">תלמידים</h2>
           <p className="text-gray-500 mt-1">ניהול תלמידי בית הספר</p>
         </div>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <label className="text-sm font-medium text-gray-700">שנת לימודים:</label>
+            <select
+              value={academicYear}
+              onChange={(e) => setAcademicYear(Number(e.target.value))}
+              className="border p-2 rounded text-sm"
+            >
+              {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i).map((year) => (
+                <option key={year} value={year}>
+                  {year}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
         <div className="flex gap-2">
           <button
             onClick={() => setShowUploadModal(true)}
@@ -263,6 +338,7 @@ export function StudentsPanel() {
                 parallel: '',
                 track: '',
                 cohortId: '',
+                academicYear: academicYear,
               });
             }}
             className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
@@ -271,13 +347,17 @@ export function StudentsPanel() {
           </button>
           <button
             onClick={async () => {
-              if (!window.confirm('האם אתה בטוח שברצונך לקדם את כל המחזורים? פעולה זו תקדם את כל התלמידים הפעילים לכיתה הבאה. תלמידים ב-י"ב יסומנו כסיימו לימודים.')) {
+              const nextAcademicYear = academicYear + 1;
+              if (!window.confirm(`האם אתה בטוח שברצונך לקדם את כל המחזורים לשנת הלימודים ${nextAcademicYear}? פעולה זו תקדם את כל התלמידים הפעילים לכיתה הבאה. תלמידים ב-י"ב יסומנו כסיימו לימודים.`)) {
                 return;
               }
               try {
                 setError(null);
-                const response = await apiClient.post('/students/promote-all');
+                const response = await apiClient.post('/students/promote-all', {
+                  academicYear: nextAcademicYear,
+                });
                 alert(`קידום שנתי הושלם בהצלחה!\nקודמו: ${response.data.promoted} תלמידים\nסיימו לימודים: ${response.data.graduated} תלמידים`);
+                setAcademicYear(nextAcademicYear);
                 await fetchStudents();
               } catch (err: any) {
                 setError(err?.response?.data?.error || err?.message || 'שגיאה בקידום שנתי');
@@ -516,6 +596,24 @@ export function StudentsPanel() {
                   ))}
                 </select>
               </div>
+              {selectedStudent && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    שנת לימודים
+                  </label>
+                  <input
+                    type="number"
+                    value={formData.academicYear}
+                    onChange={(e) => setFormData({ ...formData, academicYear: Number(e.target.value) })}
+                    className="w-full border p-2 rounded"
+                    min={2020}
+                    max={2030}
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    שנה זו תשמש ליצירת רשומת הרשמה חדשה
+                  </p>
+                </div>
+              )}
             </div>
             <div className="flex gap-2">
               <button
@@ -538,6 +636,7 @@ export function StudentsPanel() {
                     parallel: '',
                     track: '',
                     cohortId: '',
+                    academicYear: academicYear,
                   });
                 }}
                 className="px-4 bg-gray-300 text-gray-700 p-2 rounded hover:bg-gray-400 transition-colors font-medium"
@@ -600,9 +699,9 @@ export function StudentsPanel() {
                     <td className="p-3 text-sm">{student.firstName}</td>
                     <td className="p-3 text-sm">{student.lastName}</td>
                     <td className="p-3 text-sm">{student.gender === 'MALE' ? 'זכר' : 'נקבה'}</td>
-                    <td className="p-3 text-sm">{student.grade}</td>
-                    <td className="p-3 text-sm">{student.parallel || '-'}</td>
-                    <td className="p-3 text-sm">{student.track || '-'}</td>
+                    <td className="p-3 text-sm">{getCurrentClass(student)?.grade || student.grade || '-'}</td>
+                    <td className="p-3 text-sm">{getCurrentClass(student)?.parallel || student.parallel || '-'}</td>
+                    <td className="p-3 text-sm">{getCurrentClass(student)?.track || student.track || '-'}</td>
                     <td className="p-3 text-sm">{student.cohort?.name || '-'}</td>
                     <td className="p-3">
                       <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(student.status)}`}>
@@ -682,16 +781,22 @@ export function StudentsPanel() {
                     </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">כיתה</label>
-                    <div className="p-2 bg-gray-50 rounded">{viewingStudent.grade}</div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">כיתה נוכחית ({academicYear})</label>
+                    <div className="p-2 bg-gray-50 rounded">
+                      {getCurrentClass(viewingStudent)?.grade || viewingStudent.grade || '-'}
+                    </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">מקבילה</label>
-                    <div className="p-2 bg-gray-50 rounded">{viewingStudent.parallel || '-'}</div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">מקבילה נוכחית</label>
+                    <div className="p-2 bg-gray-50 rounded">
+                      {getCurrentClass(viewingStudent)?.parallel || viewingStudent.parallel || '-'}
+                    </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">מגמה</label>
-                    <div className="p-2 bg-gray-50 rounded">{viewingStudent.track || '-'}</div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">מגמה נוכחית</label>
+                    <div className="p-2 bg-gray-50 rounded">
+                      {getCurrentClass(viewingStudent)?.track || viewingStudent.track || '-'}
+                    </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">מחזור</label>
@@ -818,6 +923,42 @@ export function StudentsPanel() {
                       <label className="block text-sm font-medium text-gray-700 mb-1">דואר אלקטרוני</label>
                       <div className="p-2 bg-gray-50 rounded">{viewingStudent.parent2Email || '-'}</div>
                     </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Enrollment History */}
+              {viewingStudent.enrollments && viewingStudent.enrollments.length > 0 && (
+                <div>
+                  <h4 className="text-lg font-semibold text-gray-800 mb-4 border-b pb-2">היסטוריית הרשמה</h4>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-right border-collapse">
+                      <thead className="bg-gray-100">
+                        <tr>
+                          <th className="p-2 border-b font-semibold text-gray-600 text-sm">שנת לימודים</th>
+                          <th className="p-2 border-b font-semibold text-gray-600 text-sm">כיתה</th>
+                          <th className="p-2 border-b font-semibold text-gray-600 text-sm">מקבילה</th>
+                          <th className="p-2 border-b font-semibold text-gray-600 text-sm">מגמה</th>
+                          <th className="p-2 border-b font-semibold text-gray-600 text-sm">תאריך הרשמה</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {viewingStudent.enrollments
+                          .sort((a, b) => b.class.academicYear - a.class.academicYear || 
+                            new Date(b.enrollmentDate).getTime() - new Date(a.enrollmentDate).getTime())
+                          .map((enrollment) => (
+                            <tr key={enrollment.id} className="border-b hover:bg-gray-50">
+                              <td className="p-2 text-sm">{enrollment.class.academicYear}</td>
+                              <td className="p-2 text-sm">{enrollment.class.grade}</td>
+                              <td className="p-2 text-sm">{enrollment.class.parallel || '-'}</td>
+                              <td className="p-2 text-sm">{enrollment.class.track || '-'}</td>
+                              <td className="p-2 text-sm">
+                                {new Date(enrollment.enrollmentDate).toLocaleDateString('he-IL')}
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               )}

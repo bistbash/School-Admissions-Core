@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { SOCService, AuditLogFilter, IncidentUpdate } from './soc.service';
 import { ForbiddenError, NotFoundError } from '../../lib/errors';
+import { auditFromRequest } from '../../lib/audit';
 
 const socService = new SOCService();
 
@@ -207,6 +208,89 @@ export class SOCController {
 
       await socService.unblockIP(ipAddress);
       res.json({ message: 'IP address unblocked successfully' });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Get all trusted users/IPs
+   * GET /api/soc/trusted-users
+   */
+  async getTrustedUsers(req: Request, res: Response, next: NextFunction) {
+    try {
+      const trustedUsers = await socService.getTrustedUsers();
+      res.json(trustedUsers);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Add a trusted user/IP
+   * POST /api/soc/trusted-users
+   */
+  async addTrustedUser(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { userId, ipAddress, email, name, reason, expiresAt } = req.body;
+      const user = (req as any).user;
+      const createdBy = user?.userId;
+
+      if (!userId && !ipAddress && !email) {
+        return res.status(400).json({ 
+          error: 'At least one of userId, ipAddress, or email is required' 
+        });
+      }
+
+      const trustedUser = await socService.addTrustedUser({
+        userId,
+        ipAddress,
+        email,
+        name,
+        reason: reason || 'Added by admin',
+        createdBy,
+        expiresAt: expiresAt ? new Date(expiresAt) : undefined,
+      });
+
+      // Log the action
+      await auditFromRequest(req, 'CREATE', 'TRUSTED_USER', {
+        status: 'SUCCESS',
+        resourceId: trustedUser.id,
+        details: {
+          userId,
+          ipAddress,
+          email,
+          name,
+          reason,
+        },
+      }).catch(console.error);
+
+      res.status(201).json(trustedUser);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Remove a trusted user/IP
+   * DELETE /api/soc/trusted-users/:id
+   */
+  async removeTrustedUser(req: Request, res: Response, next: NextFunction) {
+    try {
+      const id = Number(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: 'Invalid trusted user ID' });
+      }
+
+      await socService.removeTrustedUser(id);
+
+      // Log the action
+      await auditFromRequest(req, 'DELETE', 'TRUSTED_USER', {
+        status: 'SUCCESS',
+        resourceId: id,
+      }).catch(console.error);
+
+      res.json({ message: 'Trusted user/IP removed successfully' });
     } catch (error) {
       next(error);
     }

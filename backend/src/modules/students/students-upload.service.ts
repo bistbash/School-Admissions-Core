@@ -1,6 +1,7 @@
 import * as XLSX from 'xlsx';
 import { prisma } from '../../lib/prisma';
 import { ValidationError } from '../../lib/errors';
+import { StudentsService } from './students.service';
 
 export interface ExcelStudentRow {
   'מספר ת.ז'?: string | number;
@@ -36,6 +37,57 @@ export interface ExcelStudentRow {
 }
 
 export class StudentsUploadService {
+  private studentsService: StudentsService;
+
+  constructor() {
+    this.studentsService = new StudentsService();
+  }
+
+  /**
+   * Get current academic year (same logic as StudentsService)
+   */
+  private getCurrentAcademicYear(): number {
+    const now = new Date();
+    return now.getFullYear();
+  }
+
+  /**
+   * Find or create a Class record (same logic as StudentsService)
+   */
+  private async findOrCreateClass(
+    grade: string,
+    parallel: string | undefined,
+    track: string | undefined,
+    academicYear: number
+  ) {
+    const existingClass = await prisma.class.findUnique({
+      where: {
+        grade_parallel_track_academicYear: {
+          grade,
+          parallel: parallel || null,
+          track: track || null,
+          academicYear,
+        },
+      },
+    });
+
+    if (existingClass) {
+      return existingClass;
+    }
+
+    const className = [grade, parallel, track].filter(Boolean).join(' - ') || grade;
+    return prisma.class.create({
+      data: {
+        grade,
+        parallel: parallel || null,
+        track: track || null,
+        academicYear,
+        name: className,
+        isActive: true,
+      },
+    });
+  }
+
   /**
    * Parse Excel file and return array of student data
    * Supports multiple sheets (שכבה X) and starts from row 3
@@ -94,7 +146,7 @@ export class StudentsUploadService {
     // Try to find existing cohort
     let cohort = null;
     try {
-      cohort = await (prisma as any).cohort.findFirst({
+      cohort = await prisma.cohort.findFirst({
         where: {
           OR: [
             { name: name },
@@ -110,7 +162,7 @@ export class StudentsUploadService {
 
     if (!cohort) {
       // Create new cohort with default grade (ט')
-      cohort = await (prisma as any).cohort.create({
+      cohort = await prisma.cohort.create({
         data: {
           name: name,
           startYear: year,
@@ -125,8 +177,9 @@ export class StudentsUploadService {
 
   /**
    * Process Excel data and create/update students
+   * Uses batch processing for better performance with large files
    */
-  async processExcelData(rows: ExcelStudentRow[]): Promise<{
+  async processExcelData(rows: ExcelStudentRow[], batchSize: number = 50): Promise<{
     created: number;
     updated: number;
     errors: Array<{ row: number; error: string }>;
@@ -135,11 +188,18 @@ export class StudentsUploadService {
     let updated = 0;
     const errors: Array<{ row: number; error: string }> = [];
 
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
-      const rowNumber = i + 3; // +3 because Excel starts at row 1, we skip rows 1-2, so data starts at row 3
+    // Process in batches for better performance and memory management
+    for (let batchStart = 0; batchStart < rows.length; batchStart += batchSize) {
+      const batchEnd = Math.min(batchStart + batchSize, rows.length);
+      const batch = rows.slice(batchStart, batchEnd);
 
-      try {
+      // Process batch
+      for (let i = 0; i < batch.length; i++) {
+        const globalIndex = batchStart + i;
+        const row = batch[i];
+        const rowNumber = globalIndex + 3; // +3 because Excel starts at row 1, we skip rows 1-2, so data starts at row 3
+
+        try {
         // Get ID number (support both column names)
         const idNumber = String(row['מספר ת.ז'] || row['ת.ז'] || '').trim();
         const firstName = String(row['שם פרטי'] || '').trim();
@@ -205,9 +265,11 @@ export class StudentsUploadService {
         );
 
         // Check if student exists
-        const existing = await (prisma as any).student.findUnique({
+        const existing = await prisma.student.findUnique({
           where: { idNumber },
         });
+
+        const academicYear = this.getCurrentAcademicYear();
 
         const studentData: any = {
           idNumber,
@@ -218,7 +280,7 @@ export class StudentsUploadService {
           parallel,
           track,
           cohortId,
-          status: 'ACTIVE' as const,
+          academicYear,
           // Additional fields
           dateOfBirth: parseDate(row['תאריך לידה']),
           email: row['דואר אלקטרוני'] ? String(row['דואר אלקטרוני']).trim() : null,
@@ -245,12 +307,11 @@ export class StudentsUploadService {
           parent2Email: row['דואר אלקטרוני הורים 2'] ? String(row['דואר אלקטרוני הורים 2']).trim() : null,
         };
 
-        // Remove null values for update (keep existing values)
         if (existing) {
-          // Update existing student - only update provided fields
+          // Update existing student using StudentsService to ensure Enrollment is created
           const updateData: any = {};
           Object.keys(studentData).forEach(key => {
-            if (key !== 'idNumber' && key !== 'cohortId' && studentData[key] !== null && studentData[key] !== undefined) {
+            if (key !== 'idNumber' && key !== 'academicYear' && studentData[key] !== null && studentData[key] !== undefined) {
               updateData[key] = studentData[key];
             }
           });
@@ -259,23 +320,32 @@ export class StudentsUploadService {
             updateData.cohortId = studentData.cohortId;
           }
           
-          await (prisma as any).student.update({
-            where: { id: existing.id },
-            data: updateData,
-          });
+          // If grade/parallel/track is provided, include academicYear for enrollment
+          if (grade) {
+            updateData.grade = grade;
+            updateData.parallel = parallel;
+            updateData.track = track;
+            updateData.academicYear = academicYear;
+          }
+          
+          await this.studentsService.update(existing.id, updateData);
           updated++;
         } else {
-          // Create new student - all fields
-          await (prisma as any).student.create({
-            data: studentData,
-          });
+          // Create new student using StudentsService to ensure Enrollment is created
+          await this.studentsService.create(studentData);
           created++;
         }
-      } catch (error: any) {
-        errors.push({
-          row: rowNumber,
-          error: error.message || 'Unknown error',
-        });
+        } catch (error: any) {
+          errors.push({
+            row: rowNumber,
+            error: error.message || 'Unknown error',
+          });
+        }
+      }
+
+      // Log progress for large files (every 100 rows)
+      if (batchEnd % 100 === 0 || batchEnd === rows.length) {
+        console.log(`Processing: ${batchEnd}/${rows.length} rows (${Math.round((batchEnd / rows.length) * 100)}%)`);
       }
     }
 

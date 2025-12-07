@@ -71,6 +71,10 @@ export class AuthService {
       }
     }
 
+    // Check if this is the first user - if so, make them admin
+    const userCount = await prisma.soldier.count();
+    const isFirstUser = userCount === 0;
+
     // Hash password
     const hashedPassword = await hashPassword(data.password);
 
@@ -85,12 +89,35 @@ export class AuthService {
         departmentId: data.departmentId,
         roleId: data.roleId,
         isCommander: data.isCommander || false,
+        isAdmin: isFirstUser, // First user becomes admin automatically
       },
       include: {
         department: true,
         role: true,
       },
     });
+
+    // If this is the first user (admin), automatically add them to trusted users whitelist
+    if (isFirstUser) {
+      try {
+        const { addTrustedUser } = await import('../../lib/trustedUsers');
+        
+        // Add admin to trusted users whitelist by userId and email
+        await addTrustedUser({
+          userId: soldier.id,
+          email: soldier.email,
+          name: `${soldier.name} (Admin)`,
+          reason: 'First registered user - automatic admin',
+          createdBy: soldier.id,
+        });
+        
+        console.log(`✅ First user registered as admin: ${soldier.email} (ID: ${soldier.id})`);
+        console.log(`✅ Admin automatically added to trusted users whitelist`);
+      } catch (error) {
+        // Log but don't fail registration if trusted user creation fails
+        console.error('Failed to add admin to trusted users:', error);
+      }
+    }
 
     // Generate token
     const token = generateToken({
@@ -111,6 +138,7 @@ export class AuthService {
         departmentId: soldier.departmentId,
         roleId: soldier.roleId || undefined,
         isCommander: soldier.isCommander,
+        isAdmin: soldier.isAdmin, // Include admin status
       },
     };
   }
@@ -157,6 +185,7 @@ export class AuthService {
         departmentId: soldier.departmentId,
         roleId: soldier.roleId || undefined,
         isCommander: soldier.isCommander,
+        isAdmin: soldier.isAdmin, // Include admin status
       },
     };
   }
