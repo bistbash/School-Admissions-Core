@@ -1,5 +1,6 @@
-import { prisma } from '../../server';
+import { prisma } from '../../lib/prisma';
 import { Department } from '@prisma/client';
+import { NotFoundError } from '../../lib/errors';
 
 export class DepartmentsService {
     async getAll() {
@@ -26,7 +27,29 @@ export class DepartmentsService {
             },
         });
     }
+    async getById(id: number) {
+        const department = await prisma.department.findUnique({
+            where: { id },
+            include: {
+                soldiers: true,
+            },
+        });
+        if (!department) {
+            throw new NotFoundError('Department');
+        }
+        return department;
+    }
+
+    async update(id: number, data: Partial<Department>) {
+        await this.getById(id); // Check if exists
+        return prisma.department.update({
+            where: { id },
+            data,
+        });
+    }
+
     async delete(id: number) {
+        await this.getById(id); // Check if exists
         return prisma.department.delete({
             where: { id },
         });

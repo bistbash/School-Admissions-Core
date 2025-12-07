@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
+import apiClient from '../lib/api';
 
 
 export interface Field {
   name: string;
   label: string;
-  type: 'text' | 'number' | 'select' | 'checkbox';
+  type: 'text' | 'number' | 'select' | 'checkbox' | 'password' | 'email';
   options?: { value: string | number; label: string }[];
   required?: boolean;
 }
@@ -17,18 +17,28 @@ interface GenericResourcePanelProps {
 }
 
 export function GenericResourcePanel({ title, endpoint, fields }: GenericResourcePanelProps) {
-  const [items, setItems] = useState<any[]>([]);
-  const [form, setForm] = useState<any>({});
+  const [items, setItems] = useState<Record<string, any>[]>([]);
+  const [form, setForm] = useState<Record<string, any>>({});
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchData = async () => {
     try {
       setLoading(true);
-      const res = await axios.get(endpoint);
+      setError(null);
+      const res = await apiClient.get(endpoint);
       setItems(res.data);
-    } catch (error) {
-      console.error('Error fetching data', error);
-      alert('שגיאה בטעינת נתונים');
+    } catch (err: any) {
+      const message = err?.response?.data?.error || err?.message || 'שגיאה בטעינת נתונים';
+      setError(message);
+      console.error('Error fetching data', err);
+      
+      // If unauthorized, the API client will handle token removal
+      // But we should still show the error
+      if (err?.response?.status === 401) {
+        setError('נדרשת התחברות - אנא התחבר מחדש');
+      }
     } finally {
       setLoading(false);
     }
@@ -38,55 +48,148 @@ export function GenericResourcePanel({ title, endpoint, fields }: GenericResourc
     fetchData();
   }, [endpoint]);
 
+  const processFormData = (formData: Record<string, any>) => {
+    const processed: Record<string, any> = {};
+    fields.forEach(field => {
+      const value = formData[field.name];
+      
+      // Handle empty/null/undefined values
+      if (value === '' || value === null || value === undefined) {
+        // Checkboxes should always be included (as false)
+        if (field.type === 'checkbox') {
+          processed[field.name] = false;
+        }
+        // For required fields, keep the empty value to trigger validation
+        else if (field.required) {
+          processed[field.name] = value;
+        }
+        // For optional fields, omit them entirely from the payload
+        // This allows the server to treat them as unset
+        return;
+      }
+
+      // Process non-empty values
+      if (field.type === 'number') {
+        const numValue = Number(value);
+        if (!isNaN(numValue)) {
+          processed[field.name] = numValue;
+        } else if (field.required) {
+          // Keep invalid number for required fields to trigger validation
+          processed[field.name] = value;
+        }
+      } else if (field.type === 'checkbox') {
+        processed[field.name] = Boolean(value);
+      } else if (field.type === 'select') {
+        const selectedOption = field.options?.find(o => String(o.value) === String(value));
+        if (selectedOption) {
+          // Use the option's value (preserves type)
+          processed[field.name] = selectedOption.value;
+        } else if (field.required) {
+          // Keep the value for required fields to trigger validation
+          processed[field.name] = value;
+        }
+        // For optional select fields with no valid selection, omit them
+      } else {
+        // Text fields
+        processed[field.name] = value;
+      }
+    });
+    return processed;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      // Process form data (convert numbers, etc.)
-      const dataToSend = { ...form };
-      fields.forEach(field => {
-        if (field.type === 'number') {
-          dataToSend[field.name] = Number(dataToSend[field.name]);
-        }
-        if (field.type === 'checkbox') {
-          dataToSend[field.name] = Boolean(dataToSend[field.name]);
-        }
-        if (field.type === 'select') {
-          // Check if the selected option's value in the options array is a number
-          const selectedOption = field.options?.find(o => String(o.value) === String(dataToSend[field.name]));
-          if (selectedOption && typeof selectedOption.value === 'number') {
-            dataToSend[field.name] = Number(dataToSend[field.name]);
-          }
-        }
-      });
+      setError(null);
+      const dataToSend = processFormData(form);
 
-      await axios.post(endpoint, dataToSend);
-      fetchData();
-      setForm({}); // Reset form
-    } catch (error) {
-      console.error('Error creating item', error);
-      alert('שגיאה ביצירת פריט');
+      if (editingId) {
+        await apiClient.put(`${endpoint}/${editingId}`, dataToSend);
+      } else {
+        await apiClient.post(endpoint, dataToSend);
+      }
+      
+      await fetchData();
+      setForm({});
+      setEditingId(null);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'שגיאה בשמירת פריט';
+      setError(message);
+      console.error('Error saving item', err);
     }
   };
 
   const handleDelete = async (id: number) => {
-    // if (!confirm('האם אתה בטוח?')) return; // Removed for easier testing
-    console.log('Deleting item with id:', id);
+    console.log('handleDelete called with id:', id);
+    console.log('Current items:', items);
+    
+    const confirmed = window.confirm('האם אתה בטוח שברצונך למחוק פריט זה?');
+    console.log('Confirm result:', confirmed);
+    
+    if (!confirmed) {
+      console.log('Delete cancelled by user');
+      return;
+    }
+    
     try {
-      await axios.delete(`${endpoint}/${id}`);
-      fetchData();
-    } catch (error) {
-      console.error('Error deleting item', error);
-      alert('שגיאה במחיקת פריט');
+      setError(null);
+      setLoading(true);
+      console.log('Deleting item:', id, 'from endpoint:', `${endpoint}/${id}`);
+      const response = await apiClient.delete(`${endpoint}/${id}`);
+      console.log('Delete successful, response:', response);
+      // Remove the item from local state immediately for better UX
+      setItems(prev => {
+        const filtered = prev.filter(item => item.id !== id);
+        console.log('Updated items after delete:', filtered);
+        return filtered;
+      });
+      // Then refresh to get the latest data from server
+      await fetchData();
+    } catch (err: any) {
+      const message = err?.response?.data?.error || err?.message || 'שגיאה במחיקת פריט';
+      setError(message);
+      console.error('Error deleting item:', err);
+      console.error('Error details:', {
+        status: err?.response?.status,
+        data: err?.response?.data,
+        message: err?.message
+      });
+      // Still refresh to get current state
+      await fetchData();
+    } finally {
+      setLoading(false);
     }
   };
 
+  const handleEdit = (item: Record<string, any>) => {
+    setEditingId(item.id);
+    const formData: Record<string, any> = {};
+    fields.forEach(field => {
+      formData[field.name] = item[field.name] ?? (field.type === 'checkbox' ? false : '');
+    });
+    setForm(formData);
+    // Scroll to form
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setForm({});
+  };
+
   const handleInputChange = (field: Field, value: any) => {
-    setForm((prev: any) => ({ ...prev, [field.name]: value }));
+    setForm((prev) => ({ ...prev, [field.name]: value }));
   };
 
   return (
     <div>
       <h2 className="text-xl font-semibold mb-4">{title}</h2>
+
+      {error && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded">
+          {error}
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8 bg-gray-50 p-4 rounded shadow-sm">
         {fields.map((field) => (
@@ -119,21 +222,39 @@ export function GenericResourcePanel({ title, endpoint, fields }: GenericResourc
               </label>
             ) : (
               <input
-                type={field.type}
+                type={
+                  field.type === 'password' ? 'password' :
+                  field.type === 'email' ? 'email' :
+                  field.type === 'number' ? 'number' :
+                  'text'
+                }
                 className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 placeholder={field.label}
                 value={form[field.name] || ''}
                 onChange={(e) => handleInputChange(field, e.target.value)}
                 required={field.required}
+                minLength={field.type === 'password' ? 8 : undefined}
               />
             )}
           </div>
         ))}
 
-        <div className="col-span-1 md:col-span-2 mt-2">
-          <button type="submit" className="w-full bg-blue-600 text-white p-2 rounded hover:bg-blue-700 transition-colors font-medium">
-            הוסף {title}
+        <div className="col-span-1 md:col-span-2 mt-2 flex gap-2">
+          <button 
+            type="submit" 
+            className="flex-1 bg-blue-600 text-white p-2 rounded hover:bg-blue-700 transition-colors font-medium"
+          >
+            {editingId ? 'עדכן' : `הוסף ${title}`}
           </button>
+          {editingId && (
+            <button
+              type="button"
+              onClick={handleCancelEdit}
+              className="px-4 bg-gray-300 text-gray-700 p-2 rounded hover:bg-gray-400 transition-colors font-medium"
+            >
+              ביטול
+            </button>
+          )}
         </div>
       </form>
 
@@ -175,12 +296,31 @@ export function GenericResourcePanel({ title, endpoint, fields }: GenericResourc
                     </td>
                   ))}
                   <td className="p-3">
-                    <button
-                      onClick={() => handleDelete(item.id)}
-                      className="text-red-600 hover:text-red-800 font-medium text-sm px-3 py-1 rounded hover:bg-red-50 transition-colors"
-                    >
-                      מחק
-                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleEdit(item)}
+                        className="text-blue-600 hover:text-blue-800 font-medium text-sm px-3 py-1 rounded hover:bg-blue-50 transition-colors"
+                      >
+                        ערוך
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          console.log('=== DELETE BUTTON CLICKED ===');
+                          console.log('Item:', item);
+                          console.log('Item ID:', item.id);
+                          console.log('Item ID type:', typeof item.id);
+                          alert(`Attempting to delete item with ID: ${item.id}`);
+                          handleDelete(item.id);
+                        }}
+                        className="text-red-600 hover:text-red-800 font-medium text-sm px-3 py-1 rounded hover:bg-red-50 transition-colors cursor-pointer"
+                        style={{ pointerEvents: 'auto' }}
+                      >
+                        מחק
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))
