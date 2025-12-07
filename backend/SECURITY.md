@@ -98,3 +98,4 @@ Authorization: Bearer <your-token-here>
 The frontend automatically includes this token in all API requests.
 
 
+

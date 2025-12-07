@@ -40,3 +40,64 @@ model Room {
   name     String
   capacity Int
 }
+
+model AuditLog {
+  id          Int       @id @default(autoincrement())
+  userId      Int?      // User who performed the action (null for unauthenticated)
+  userEmail   String?   // Email of user (for quick reference)
+  action      String    // Action type: LOGIN, LOGOUT, CREATE, UPDATE, DELETE, READ, AUTH_FAILED, etc.
+  resource    String    // Resource type: SOLDIER, DEPARTMENT, ROLE, ROOM, AUTH
+  resourceId  Int?      // ID of the affected resource (null for list operations)
+  details     String?   // JSON string with additional details
+  ipAddress   String?   // Client IP address
+  userAgent   String?   // Client user agent
+  status      String    // SUCCESS, FAILURE, ERROR
+  errorMessage String?  // Error message if status is FAILURE or ERROR
+  createdAt   DateTime  @default(now())
+  
+  // SOC Analyst fields
+  incidentStatus String?  // NEW, INVESTIGATING, RESOLVED, FALSE_POSITIVE, ESCALATED
+  priority       String?  // LOW, MEDIUM, HIGH, CRITICAL
+  assignedTo     Int?     // User ID of assigned analyst
+  analystNotes   String?  // Notes from SOC analyst
+  resolvedAt     DateTime? // When incident was resolved
+  resolvedBy     Int?     // User ID who resolved it
+  
+  @@index([userId])
+  @@index([action])
+  @@index([resource])
+  @@index([createdAt])
+  @@index([status])
+  @@index([incidentStatus])
+  @@index([priority])
+  @@index([assignedTo])
+}
+
+model BlockedIP {
+  id          Int       @id @default(autoincrement())
+  ipAddress   String    @unique // Blocked IP address
+  reason      String?   // Reason for blocking
+  blockedBy   Int?      // User ID who blocked it
+  blockedAt   DateTime  @default(now())
+  expiresAt   DateTime? // Optional expiration date
+  isActive    Boolean   @default(true)
+  
+  @@index([ipAddress])
+  @@index([isActive])
+}
+
+model ApiKey {
+  id          Int       @id @default(autoincrement())
+  key         String    @unique // Hashed API key
+  name        String    // Name/description of the API key
+  userId      Int?      // User who created it (optional)
+  lastUsedAt  DateTime? // Last time the key was used
+  expiresAt   DateTime? // Optional expiration date
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  permissions String?   // JSON string with permissions (optional)
+  
+  @@index([key])
+  @@index([isActive])
+  @@index([userId])
+}
