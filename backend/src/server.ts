@@ -8,9 +8,13 @@ import roomsRoutes from './modules/rooms/rooms.routes';
 import authRoutes from './modules/auth/auth.routes';
 import socRoutes from './modules/soc/soc.routes';
 import apiKeysRoutes from './modules/api-keys/api-keys.routes';
+import studentsRoutes from './modules/students/students.routes';
+import studentExitsRoutes from './modules/student-exits/student-exits.routes';
+import cohortsRoutes from './modules/cohorts/cohorts.routes';
 import { errorHandler } from './lib/errors';
 import { auditMiddleware } from './lib/audit';
 import { ipBlockingMiddleware } from './lib/ipBlocking';
+import { apiRateLimiter } from './lib/security';
 
 dotenv.config();
 
@@ -29,6 +33,9 @@ app.use(express.json());
 // IP blocking middleware - must be before routes
 app.use(ipBlockingMiddleware);
 
+// Rate limiting - protect against abuse
+app.use('/api', apiRateLimiter);
+
 // Audit logging middleware - logs all requests
 app.use(auditMiddleware);
 
@@ -44,6 +51,9 @@ app.use('/api/soldiers', soldiersRoutes);
 app.use('/api/departments', departmentsRoutes);
 app.use('/api/roles', rolesRoutes);
 app.use('/api/rooms', roomsRoutes);
+app.use('/api/students', studentsRoutes);
+app.use('/api/student-exits', studentExitsRoutes);
+app.use('/api/cohorts', cohortsRoutes);
 app.use('/api/soc', socRoutes);
 
 app.get('/', (req, res) => {

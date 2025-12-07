@@ -1,0 +1,22 @@
+-- AlterTable
+ALTER TABLE "Student" ADD COLUMN "address" TEXT;
+ALTER TABLE "Student" ADD COLUMN "address2" TEXT;
+ALTER TABLE "Student" ADD COLUMN "aliyahDate" DATETIME;
+ALTER TABLE "Student" ADD COLUMN "dateOfBirth" DATETIME;
+ALTER TABLE "Student" ADD COLUMN "email" TEXT;
+ALTER TABLE "Student" ADD COLUMN "locality" TEXT;
+ALTER TABLE "Student" ADD COLUMN "locality2" TEXT;
+ALTER TABLE "Student" ADD COLUMN "mobilePhone" TEXT;
+ALTER TABLE "Student" ADD COLUMN "parent1Email" TEXT;
+ALTER TABLE "Student" ADD COLUMN "parent1FirstName" TEXT;
+ALTER TABLE "Student" ADD COLUMN "parent1IdNumber" TEXT;
+ALTER TABLE "Student" ADD COLUMN "parent1LastName" TEXT;
+ALTER TABLE "Student" ADD COLUMN "parent1Mobile" TEXT;
+ALTER TABLE "Student" ADD COLUMN "parent1Type" TEXT;
+ALTER TABLE "Student" ADD COLUMN "parent2Email" TEXT;
+ALTER TABLE "Student" ADD COLUMN "parent2FirstName" TEXT;
+ALTER TABLE "Student" ADD COLUMN "parent2IdNumber" TEXT;
+ALTER TABLE "Student" ADD COLUMN "parent2LastName" TEXT;
+ALTER TABLE "Student" ADD COLUMN "parent2Mobile" TEXT;
+ALTER TABLE "Student" ADD COLUMN "parent2Type" TEXT;
+ALTER TABLE "Student" ADD COLUMN "phone" TEXT;

@@ -1,9 +1,13 @@
 import { Router } from 'express';
 import { RolesController } from './roles.controller';
 import { validateRequest, roleSchema } from '../../lib/validation';
+import { authenticate } from '../../lib/auth';
 
 const router = Router();
 const rolesController = new RolesController();
+
+// All routes require authentication
+router.use(authenticate);
 
 router.get('/', rolesController.getAll.bind(rolesController));
 router.get('/:id', rolesController.getById.bind(rolesController));

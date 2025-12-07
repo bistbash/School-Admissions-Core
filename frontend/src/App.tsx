@@ -4,6 +4,9 @@ import { twMerge } from 'tailwind-merge';
 import { GenericResourcePanel, type Field } from './components/GenericResourcePanel';
 import { LoginForm } from './components/LoginForm';
 import { RegisterForm } from './components/RegisterForm';
+import { SOCDashboard } from './components/SOCDashboard';
+import { APIKeysPanel } from './components/APIKeysPanel';
+import { StudentsPanel } from './components/StudentsPanel';
 import apiClient from './lib/api';
 import { authStorage } from './lib/auth';
 import type { SelectOption } from './types';
@@ -181,8 +184,8 @@ function App() {
         <header className="mb-8">
           <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">מערכת ניהול משאבים צבאיים</h1>
-              <p className="text-gray-500">כלי בדיקת API גנרי</p>
+          <h1 className="text-3xl font-bold text-gray-900">מערכת ניהול משאבים צבאיים</h1>
+          <p className="text-gray-500">כלי בדיקת API גנרי</p>
             </div>
             <button
               onClick={handleLogout}
@@ -208,10 +211,49 @@ function App() {
               {res.label}
             </button>
           ))}
+          <button
+            onClick={() => setActiveTab('soc')}
+            className={cn(
+              "px-4 py-2 rounded-md text-sm font-medium transition-colors",
+              activeTab === 'soc'
+                ? "bg-blue-600 text-white"
+                : "bg-white text-gray-600 hover:bg-gray-100"
+            )}
+          >
+            מרכז ביטחון (SOC)
+          </button>
+          <button
+            onClick={() => setActiveTab('api-keys')}
+            className={cn(
+              "px-4 py-2 rounded-md text-sm font-medium transition-colors",
+              activeTab === 'api-keys'
+                ? "bg-blue-600 text-white"
+                : "bg-white text-gray-600 hover:bg-gray-100"
+            )}
+          >
+            מפתחות API
+          </button>
+          <button
+            onClick={() => setActiveTab('students')}
+            className={cn(
+              "px-4 py-2 rounded-md text-sm font-medium transition-colors",
+              activeTab === 'students'
+                ? "bg-blue-600 text-white"
+                : "bg-white text-gray-600 hover:bg-gray-100"
+            )}
+          >
+            תלמידים
+          </button>
         </div>
 
         <main className="bg-white rounded-lg shadow p-6">
-          {activeResource ? (
+          {activeTab === 'soc' ? (
+            <SOCDashboard />
+          ) : activeTab === 'api-keys' ? (
+            <APIKeysPanel />
+          ) : activeTab === 'students' ? (
+            <StudentsPanel />
+          ) : activeResource ? (
             <GenericResourcePanel
               key={activeResource.id} // Force re-mount on tab change to reset state
               title={activeResource.label}

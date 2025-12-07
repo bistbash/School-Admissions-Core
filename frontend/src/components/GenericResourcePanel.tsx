@@ -303,7 +303,7 @@ export function GenericResourcePanel({ title, endpoint, fields }: GenericResourc
                       >
                         ערוך
                       </button>
-                      <button
+                    <button
                         type="button"
                         onClick={(e) => {
                           e.preventDefault();
@@ -317,9 +317,9 @@ export function GenericResourcePanel({ title, endpoint, fields }: GenericResourc
                         }}
                         className="text-red-600 hover:text-red-800 font-medium text-sm px-3 py-1 rounded hover:bg-red-50 transition-colors cursor-pointer"
                         style={{ pointerEvents: 'auto' }}
-                      >
-                        מחק
-                      </button>
+                    >
+                      מחק
+                    </button>
                     </div>
                   </td>
                 </tr>

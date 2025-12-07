@@ -13,8 +13,10 @@ export type AuditAction =
   | 'READ'
   | 'READ_LIST'
   | 'AUTH_FAILED'
+  | 'AUTH_SUCCESS'
   | 'TOKEN_EXPIRED'
-  | 'UNAUTHORIZED_ACCESS';
+  | 'UNAUTHORIZED_ACCESS'
+  | 'RATE_LIMIT_EXCEEDED';
 
 export type AuditResource = 
   | 'AUTH'
@@ -23,7 +25,11 @@ export type AuditResource =
   | 'ROLE'
   | 'ROOM'
   | 'AUDIT_LOG'
-  | 'SYSTEM';
+  | 'SYSTEM'
+  | 'STUDENT'
+  | 'COHORT'
+  | 'STUDENT_EXIT'
+  | 'API_KEY';
 
 export type AuditStatus = 'SUCCESS' | 'FAILURE' | 'ERROR';
 

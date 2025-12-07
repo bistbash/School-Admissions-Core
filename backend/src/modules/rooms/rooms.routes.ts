@@ -1,9 +1,13 @@
 import { Router } from 'express';
 import { RoomsController } from './rooms.controller';
 import { validateRequest, roomSchema } from '../../lib/validation';
+import { authenticate } from '../../lib/auth';
 
 const router = Router();
 const roomsController = new RoomsController();
+
+// All routes require authentication
+router.use(authenticate);
 
 router.get('/', roomsController.getAll.bind(roomsController));
 router.get('/:id', roomsController.getById.bind(roomsController));

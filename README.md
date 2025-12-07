@@ -5,7 +5,12 @@ A full-stack application for managing military resources (soldiers, departments,
 ## Features
 
 - ✅ **Secure Authentication** - JWT-based authentication with bcrypt password hashing
+- ✅ **API Keys** - Secure API key authentication for programmatic access
 - ✅ **User Registration & Login** - Secure user registration and login system
+- ✅ **Audit Logging** - Comprehensive audit trail of all system activities
+- ✅ **SOC API** - Security Operations Center API for monitoring and analysis
+- ✅ **IP Blocking** - Block malicious IP addresses automatically
+- ✅ **Incident Management** - SOC Analyst tools for managing security events
 - ✅ CRUD operations for Soldiers, Departments, Roles, and Rooms
 - ✅ Input validation with Zod
 - ✅ Type-safe API with TypeScript

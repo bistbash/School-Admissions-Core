@@ -84,3 +84,4 @@ JWT_SECRET=your-secret-here
 5. Ensure JWT_SECRET is set in backend `.env`
 
 
+

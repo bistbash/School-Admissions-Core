@@ -101,3 +101,88 @@ model ApiKey {
   @@index([isActive])
   @@index([userId])
 }
+
+model Cohort {
+  id          Int       @id @default(autoincrement())
+  name        String    @unique // Cohort name (e.g., "Cohort 2024")
+  startYear   Int       // Start year
+  currentGrade String   // Current grade (10th, 11th, 12th, 13th, 14th)
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  students    Student[]
+  
+  @@index([startYear])
+  @@index([isActive])
+}
+
+model Student {
+  id              Int       @id @default(autoincrement())
+  idNumber        String    @unique // ID number
+  firstName       String    // First name
+  lastName        String    // Last name
+  gender          String    // Gender: MALE, FEMALE
+  grade           String    // Current grade
+  parallel        String?   // Parallel class (A, B, C, etc.)
+  track           String?   // Track/major
+  cohortId        Int       // Starting cohort
+  cohort          Cohort    @relation(fields: [cohortId], references: [id])
+  status          String    @default("ACTIVE") // ACTIVE, GRADUATED, LEFT, ARCHIVED
+  
+  // Additional fields from mashov system
+  dateOfBirth     DateTime? // Date of birth
+  email           String?   // Email
+  aliyahDate      DateTime? // Aliyah date
+  locality        String?   // Locality
+  address         String?   // Address
+  address2        String?   // Address 2
+  locality2       String?   // Locality 2
+  phone           String?   // Phone
+  mobilePhone     String?   // Mobile phone
+  
+  // Parent 1
+  parent1IdNumber String?   // Parent 1 ID number
+  parent1FirstName String?  // Parent 1 first name
+  parent1LastName  String?  // Parent 1 last name
+  parent1Type      String?  // Parent 1 type
+  parent1Mobile    String?  // Parent 1 mobile
+  parent1Email     String?  // Parent 1 email
+  
+  // Parent 2
+  parent2IdNumber String?   // Parent 2 ID number
+  parent2FirstName String?  // Parent 2 first name
+  parent2LastName  String?  // Parent 2 last name
+  parent2Type      String?  // Parent 2 type
+  parent2Mobile    String?  // Parent 2 mobile
+  parent2Email     String?  // Parent 2 email
+  
+  exitRecord      StudentExit?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  @@index([idNumber])
+  @@index([cohortId])
+  @@index([status])
+  @@index([grade])
+}
+
+model StudentExit {
+  id                  Int       @id @default(autoincrement())
+  studentId            Int       @unique // Link to student
+  student              Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  hasLeft              Boolean   @default(true) // Has left
+  exitReason           String?   // Exit reason
+  exitCategory         String?   // Exit category
+  receivingInstitution String?   // Receiving institution
+  wasDesiredExit       Boolean?  // Was desired exit?
+  exitDate             DateTime? // Exit date
+  clearanceCompleted   Boolean   @default(false) // Clearance completed
+  passedSupply         Boolean   @default(false) // Passed supply
+  expelledFromSchool   Boolean   @default(false) // Expelled from school
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  
+  @@index([studentId])
+  @@index([hasLeft])
+  @@index([exitDate])
+}

@@ -8,18 +8,24 @@ import { ForbiddenError } from './errors';
 export async function isIPBlocked(ipAddress: string): Promise<boolean> {
   if (!ipAddress) return false;
 
-  const blocked = await prisma.blockedIP.findFirst({
-    where: {
-      ipAddress,
-      isActive: true,
-      OR: [
-        { expiresAt: null },
-        { expiresAt: { gt: new Date() } },
-      ],
-    },
-  });
+  try {
+    const blocked = await prisma.blockedIP.findFirst({
+      where: {
+        ipAddress,
+        isActive: true,
+        OR: [
+          { expiresAt: null },
+          { expiresAt: { gt: new Date() } },
+        ],
+      },
+    });
 
-  return !!blocked;
+    return !!blocked;
+  } catch (error) {
+    // If Prisma crashes, log error but don't block requests
+    console.error('Error checking IP block status:', error);
+    return false;
+  }
 }
 
 /**

@@ -1,9 +1,13 @@
 import { Router } from 'express';
 import { DepartmentsController } from './departments.controller';
 import { validateRequest, departmentSchema } from '../../lib/validation';
+import { authenticate } from '../../lib/auth';
 
 const router = Router();
 const departmentsController = new DepartmentsController();
+
+// All routes require authentication
+router.use(authenticate);
 
 router.get('/', departmentsController.getAll.bind(departmentsController));
 router.post('/', validateRequest(departmentSchema), departmentsController.create.bind(departmentsController));
