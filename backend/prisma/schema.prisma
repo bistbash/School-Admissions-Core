@@ -1,0 +1,50 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Department {
+  id        Int       @id @default(autoincrement())
+  name      String
+  soldiers  Soldier[]
+}
+
+model Role {
+  id        Int       @id @default(autoincrement())
+  name      String
+  soldiers  Soldier[]
+}
+
+model Soldier {
+  id             Int        @id @default(autoincrement())
+  personalNumber String     @unique
+  name           String
+  type           String     // "CONSCRIPT" or "PERMANENT"
+  department     Department @relation(fields: [departmentId], references: [id])
+  departmentId   Int
+  role           Role?      @relation(fields: [roleId], references: [id])
+  roleId         Int?
+  
+  // Self-relation for commanders if needed, but requirements say "Commanders are contained in Permanent"
+  // and "Department has commanders".
+  // Let's add a boolean or just filter by type.
+  // However, to explicitly link a commander to a department as "The Commander", we might need a field.
+  // But "Mefaked/Mefakdim" (plural) implies a department can have multiple commanders.
+  // So we can just query soldiers where type=PERMANENT and department=X.
+  // OR, if there's a specific "Commander" role/assignment, we might need a separate relation or model.
+  // The prompt says: "Department has commander/commanders (commanders are contained in permanent)".
+  // This implies a subset of Permanent soldiers are commanders of the department.
+  // I will add `isCommander` boolean for simplicity, or we can assume all Permanent in a Dept are commanders? 
+  // Probably not. Let's add `isCommander` boolean.
+  isCommander    Boolean    @default(false)
+}
+
+model Room {
+  id       Int    @id @default(autoincrement())
+  name     String
+  capacity Int
+}

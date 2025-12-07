@@ -1,0 +1,7 @@
+# קובץ .gitignore
+venv/
+__pycache__/
+*.sqlite3
+.DS_Store
+# סודות ו-DB
+.env
