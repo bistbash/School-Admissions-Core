@@ -21,8 +21,23 @@ import { auditMiddleware } from './lib/audit';
 import { ipBlockingMiddleware } from './lib/ipBlocking';
 import { apiRateLimiter } from './lib/security';
 import { csrfProtection } from './lib/csrf';
+import { requestIdMiddleware } from './lib/middleware/request-id';
+import { requestLoggerMiddleware } from './lib/middleware/request-logger';
+import { healthCheck, livenessCheck, readinessCheck } from './lib/health';
+import { getMetrics, startMetricsLogging } from './lib/metrics';
+import { logger } from './lib/logger';
+import { prisma } from './lib/prisma';
+import { validateEnv } from './lib/env';
 
 dotenv.config();
+
+// Validate environment variables on startup
+try {
+  validateEnv();
+} catch (error: any) {
+  console.error('Failed to validate environment variables:', error.message);
+  process.exit(1);
+}
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -72,6 +87,12 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json({ limit: '10mb' })); // Limit JSON payload size
 
+// Request ID middleware - must be early to track all requests
+app.use(requestIdMiddleware);
+
+// Request logging middleware - logs all HTTP requests with metrics
+app.use(requestLoggerMiddleware);
+
 // Security: CSRF Protection for state-changing operations
 // Note: This provides basic protection. Full CSRF protection requires frontend changes.
 app.use('/api', csrfProtection);
@@ -85,9 +106,19 @@ app.use('/api', apiRateLimiter);
 // Audit logging middleware - logs all requests
 app.use(auditMiddleware);
 
-// Health check
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+// Health check endpoints
+app.get('/health', healthCheck);
+app.get('/ready', readinessCheck); // Kubernetes readiness probe
+app.get('/live', livenessCheck);   // Kubernetes liveness probe
+
+// Metrics endpoint (protected in production)
+app.get('/metrics', (req, res) => {
+  // In production, you might want to protect this endpoint
+  const isProduction = process.env.NODE_ENV === 'production';
+  if (isProduction && !(req as any).user) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  res.json(getMetrics());
 });
 
 // Routes
@@ -113,7 +144,57 @@ app.get('/', (req, res) => {
 // Error handling middleware (must be last)
 app.use(errorHandler);
 
-app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+// Start metrics logging
+startMetricsLogging();
+
+// Graceful shutdown handler
+let server: any;
+const gracefulShutdown = async (signal: string) => {
+  logger.info({ signal }, 'Received shutdown signal, starting graceful shutdown...');
+  
+  // Stop accepting new requests
+  if (server) {
+    server.close(() => {
+      logger.info('HTTP server closed');
+    });
+  }
+
+  // Close database connections
+  try {
+    await prisma.$disconnect();
+    logger.info('Database connections closed');
+  } catch (error: any) {
+    logger.error({ error: error.message }, 'Error closing database connections');
+  }
+
+  // Give ongoing requests time to complete (max 10 seconds)
+  setTimeout(() => {
+    logger.info('Graceful shutdown complete');
+    process.exit(0);
+  }, 10000);
+};
+
+// Handle shutdown signals
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (error: Error) => {
+  logger.error({ error: error.message, stack: error.stack }, 'Uncaught exception');
+  gracefulShutdown('uncaughtException');
+});
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (reason: any, promise: Promise<any>) => {
+  logger.error({ reason, promise }, 'Unhandled promise rejection');
+  // Don't exit on unhandled rejection, but log it
+});
+
+// Start server
+server = app.listen(PORT, () => {
+  logger.info({
+    port: PORT,
+    environment: process.env.NODE_ENV || 'development',
+    nodeVersion: process.version,
+  }, `Server is running on port ${PORT}`);
 });

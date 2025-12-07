@@ -1,4 +1,5 @@
-import { PrismaClient, PrismaClientRustPanicError } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
+import { PrismaClientRustPanicError } from '@prisma/client/runtime/library';
 
 // Singleton pattern for Prisma Client
 const globalForPrisma = globalThis as unknown as {
