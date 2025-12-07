@@ -5,9 +5,11 @@ import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card'
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
 import { apiClient } from '../lib/api';
+import { useAuth } from '../contexts/AuthContext';
 
 export function CompleteProfilePage() {
   const navigate = useNavigate();
+  const { logout } = useAuth();
   const [formData, setFormData] = useState({
     personalNumber: '',
     name: '',
@@ -69,7 +71,12 @@ export function CompleteProfilePage() {
         newPassword: formData.newPassword,
       });
 
-      navigate('/dashboard');
+      // Profile completed successfully - status is now PENDING
+      // User will need to wait for admin approval
+      // Logout and redirect to login
+      alert('הפרופיל הושלם בהצלחה! החשבון שלך ממתין לאישור מנהל. תתבקש להתחבר שוב לאחר האישור.');
+      logout();
+      window.location.href = '/login';
     } catch (err: any) {
       setError(err.message || 'שגיאה בשמירת הפרופיל');
     } finally {

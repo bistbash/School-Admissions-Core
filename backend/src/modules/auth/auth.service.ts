@@ -25,6 +25,7 @@ export interface AuthResponse {
     isCommander: boolean;
     isAdmin: boolean;
     needsProfileCompletion: boolean;
+    approvalStatus?: string;
   };
 }
 
@@ -178,6 +179,7 @@ export class AuthService {
         isCommander: soldier.isCommander,
         isAdmin: soldier.isAdmin,
         needsProfileCompletion: soldier.needsProfileCompletion,
+        approvalStatus: soldier.approvalStatus,
       },
     };
   }
@@ -193,6 +195,11 @@ export class AuthService {
 
     if (!soldier) {
       throw new NotFoundError('User');
+    }
+
+    // Prevent profile completion if user is already PENDING (already completed once)
+    if (soldier.approvalStatus === 'PENDING') {
+      throw new ValidationError('Profile already completed and pending approval. You cannot modify your profile until it is reviewed by an administrator.');
     }
 
     // Allow profile completion if:

@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Search as SearchIcon, X, Users, GraduationCap, Building2, DoorOpen, Loader2, Command, LayoutDashboard, Settings, Plus, Edit, Trash2, KeyRound, Badge } from 'lucide-react';
+import { Search as SearchIcon, X, Users, GraduationCap, Building2, DoorOpen, Loader2, Command, LayoutDashboard, Settings, Plus, Edit, Trash2, KeyRound, Badge, Shield } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { apiClient } from '../../lib/api';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { usePermissions } from '../../contexts/PermissionsContext';
 
 interface SearchResult {
   id: number | string;
-  type: 'student' | 'user' | 'department' | 'room' | 'page' | 'action';
+  type: 'student' | 'user' | 'department' | 'room' | 'page' | 'action' | 'soc';
   title: string;
   subtitle?: string;
   href: string;
@@ -28,6 +29,7 @@ export function Search({ className }: SearchProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { hasPermission } = usePermissions();
 
   // Add/remove blur class to body when search is open
   useEffect(() => {
@@ -119,11 +121,14 @@ export function Search({ className }: SearchProps) {
         // Search pages and actions (based on user permissions)
         const pagesAndActions: SearchResult[] = [];
 
-        // Pages - available to all authenticated users
+        // Pages - available to all authenticated users (with permission checks)
         const availablePages = [
           { name: 'לוח בקרה', href: '/dashboard', icon: LayoutDashboard, keywords: ['לוח', 'בקרה', 'dashboard', 'דשבורד'] },
           { name: 'תלמידים', href: '/students', icon: GraduationCap, keywords: ['תלמידים', 'students', 'תלמיד'] },
           { name: 'ניהול משאבים', href: '/resources', icon: Building2, keywords: ['משאבים', 'resources', 'ניהול', 'משתמשים', 'מחלקות', 'חדרים', 'תפקידים'] },
+          ...(hasPermission('soc.read') ? [
+            { name: 'מרכז אבטחה', href: '/soc', icon: Shield, keywords: ['אבטחה', 'soc', 'מרכז אבטחה', 'security', 'תקריות', 'incidents', 'יומן', 'audit', 'התראות', 'alerts'] }
+          ] : []),
           { name: 'הגדרות', href: '/settings', icon: Settings, keywords: ['הגדרות', 'settings', 'הגדרה'] },
         ];
 
@@ -161,9 +166,9 @@ export function Search({ className }: SearchProps) {
           if (matches) {
             pagesAndActions.push({
               id: `page-${page.href}`,
-              type: 'page',
+              type: page.href === '/soc' ? 'soc' : 'page',
               title: page.name,
-              subtitle: 'דף',
+              subtitle: page.href === '/soc' ? 'מרכז אבטחה' : 'דף',
               href: page.href,
             });
           }
@@ -259,7 +264,7 @@ export function Search({ className }: SearchProps) {
 
     const debounceTimer = setTimeout(performSearch, 200);
     return () => clearTimeout(debounceTimer);
-  }, [query, user]);
+  }, [query, user, hasPermission]);
 
   const handleResultClick = (result: SearchResult) => {
     navigate(result.href);
@@ -282,6 +287,8 @@ export function Search({ className }: SearchProps) {
         return <LayoutDashboard className="h-3.5 w-3.5" />;
       case 'action':
         return <Plus className="h-3.5 w-3.5" />;
+      case 'soc':
+        return <Shield className="h-3.5 w-3.5" />;
     }
   };
 
@@ -299,6 +306,8 @@ export function Search({ className }: SearchProps) {
         return 'דף';
       case 'action':
         return 'פעולה';
+      case 'soc':
+        return 'מרכז אבטחה';
     }
   };
 

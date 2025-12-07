@@ -9,25 +9,30 @@ import {
   Menu,
   ChevronRight,
   Building2,
-  BookOpen
+  BookOpen,
+  Shield
 } from 'lucide-react';
 import { ThemeToggle } from '../ui/ThemeToggle';
 import { Button } from '../ui/Button';
 import { Search } from '../ui/Search';
 import { authStorage } from '../../lib/auth';
 import { useAuth } from '../../contexts/AuthContext';
+import { usePermissions } from '../../contexts/PermissionsContext';
 import { cn } from '../../lib/utils';
 
 interface NavItem {
   name: string;
   href: string;
   icon: React.ComponentType<{ className?: string }>;
+  permission?: string; // Optional permission required to see this item
 }
 
-const navigation: NavItem[] = [
+// Navigation items - will be filtered by permissions
+const allNavigationItems: NavItem[] = [
   { name: 'לוח בקרה', href: '/dashboard', icon: LayoutDashboard },
   { name: 'תלמידים', href: '/students', icon: GraduationCap },
   { name: 'ניהול משאבים', href: '/resources', icon: Building2 },
+  { name: 'מרכז אבטחה', href: '/soc', icon: Shield, permission: 'soc.read' },
   { name: 'הגדרות', href: '/settings', icon: Settings },
 ];
 
@@ -35,7 +40,14 @@ export function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuth();
+  const { hasPermission } = usePermissions();
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
+
+  // Filter navigation items based on permissions
+  const navigation = allNavigationItems.filter(item => {
+    if (!item.permission) return true; // No permission required
+    return hasPermission(item.permission);
+  });
 
   const handleLogout = () => {
     authStorage.removeToken();

@@ -22,6 +22,9 @@ router.get('/users/:userId/activity', socController.getUserActivity.bind(socCont
 router.get('/resources/:resource/:resourceId', socController.getResourceHistory.bind(socController));
 router.put('/incidents/:id', socController.updateIncident.bind(socController));
 router.post('/incidents/:id/mark', socController.markAsIncident.bind(socController));
+router.get('/metrics', socController.getMetrics.bind(socController));
+router.get('/export/logs', socController.exportAuditLogs.bind(socController));
+router.get('/export/stats', socController.exportStats.bind(socController));
 // IP blocking - admin only
 router.get('/blocked-ips', requireAdmin, socController.getBlockedIPs.bind(socController));
 router.post('/block-ip', requireAdmin, socController.blockIP.bind(socController));

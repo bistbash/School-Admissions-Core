@@ -9,6 +9,7 @@ interface User {
   personalNumber?: string;
   isAdmin: boolean;
   needsProfileCompletion: boolean;
+  approvalStatus?: string;
 }
 
 interface AuthContextType {

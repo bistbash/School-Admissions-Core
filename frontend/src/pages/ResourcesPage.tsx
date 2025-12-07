@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Users, Building2, DoorOpen, Plus, Edit, Trash2, Search as SearchIcon, KeyRound, Save, Badge } from 'lucide-react';
+import { Users, Building2, DoorOpen, Plus, Edit, Trash2, Search as SearchIcon, KeyRound, Save, Badge, Eye } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
@@ -125,7 +125,6 @@ function UsersTab({ action }: { action?: string | null }) {
   const [createFormData, setCreateFormData] = useState({
     email: '',
     temporaryPassword: '',
-    departmentId: '',
   });
   const [departments, setDepartments] = useState<any[]>([]);
   const [roles, setRoles] = useState<any[]>([]);
@@ -136,6 +135,7 @@ function UsersTab({ action }: { action?: string | null }) {
   const [isResettingPassword, setIsResettingPassword] = useState(false);
   const [editFormData, setEditFormData] = useState<any>({});
   const [isUpdating, setIsUpdating] = useState(false);
+  const [viewingPendingUser, setViewingPendingUser] = useState<any | null>(null);
 
   useEffect(() => {
     loadData();
@@ -169,11 +169,10 @@ function UsersTab({ action }: { action?: string | null }) {
       await apiClient.post('/auth/create-user', {
         email: createFormData.email,
         temporaryPassword: createFormData.temporaryPassword,
-        departmentId: Number(createFormData.departmentId),
       });
 
       setShowCreateForm(false);
-      setCreateFormData({ email: '', temporaryPassword: '', departmentId: '' });
+      setCreateFormData({ email: '', temporaryPassword: '' });
       loadData();
     } catch (error: any) {
       alert(error.message || 'שגיאה ביצירת משתמש');
@@ -191,11 +190,23 @@ function UsersTab({ action }: { action?: string | null }) {
     }
   };
 
+  const handleDeleteUser = async (userId: number, userEmail: string) => {
+    if (!confirm(`האם אתה בטוח שברצונך למחוק את המשתמש ${userEmail}?\nפעולה זו אינה ניתנת לביטול!`)) return;
+
+    try {
+      await apiClient.delete(`/auth/${userId}`);
+      loadData();
+    } catch (error: any) {
+      alert(error.response?.data?.error || error.message || 'שגיאה במחיקת משתמש');
+    }
+  };
+
   const handleReject = async (userId: number) => {
     if (!confirm('האם אתה בטוח שברצונך לדחות משתמש זה?')) return;
 
     try {
       await apiClient.post(`/auth/${userId}/reject`);
+      alert('נסה שוב, הסר משתמש');
       loadData();
     } catch (error: any) {
       alert(error.message || 'שגיאה בדחיית משתמש');
@@ -332,26 +343,6 @@ function UsersTab({ action }: { action?: string | null }) {
                 minLength={8}
                 helperText="מינימום 8 תווים"
               />
-              <div>
-                <label className="block text-sm font-medium mb-1.5 text-gray-700 dark:text-gray-300">
-                  מחלקה
-                </label>
-                <select
-                  value={createFormData.departmentId}
-                  onChange={(e) =>
-                    setCreateFormData({ ...createFormData, departmentId: e.target.value })
-                  }
-                  className="w-full h-10 px-3 rounded-lg border border-gray-300 dark:border-[#333333] bg-white dark:bg-[#1C1C1C] text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-950 dark:focus:ring-gray-300 transition-all"
-                  required
-                >
-                  <option value="">בחר מחלקה</option>
-                  {departments.map((dept) => (
-                    <option key={dept.id} value={dept.id}>
-                      {dept.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
               <div className="flex gap-2 pt-2">
                 <Button type="submit" isLoading={isCreating} className="flex-1">
                   <Plus className="h-4 w-4" />
@@ -395,9 +386,26 @@ function UsersTab({ action }: { action?: string | null }) {
                     </div>
                     <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                       {pendingUser.email}
+                      {pendingUser.personalNumber && (
+                        <span className="mr-2">• מספר אישי: {pendingUser.personalNumber}</span>
+                      )}
+                      {pendingUser.department && (
+                        <span className="mr-2">• מחלקה: {pendingUser.department.name}</span>
+                      )}
+                      {pendingUser.type && (
+                        <span className="mr-2">• סוג: {pendingUser.type === 'CONSCRIPT' ? 'חובה' : 'קבע'}</span>
+                      )}
                     </div>
                   </div>
                   <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setViewingPendingUser(pendingUser)}
+                      className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Button>
                     <Button
                       size="sm"
                       onClick={() => handleApprove(pendingUser.id)}
@@ -556,6 +564,113 @@ function UsersTab({ action }: { action?: string | null }) {
         </Card>
       )}
 
+      {/* View Pending User Details Modal */}
+      {viewingPendingUser && currentUser?.isAdmin && (
+        <Card variant="default" className="animate-slide-up">
+          <CardHeader>
+            <CardTitle>פרטי משתמש ממתין</CardTitle>
+            <CardDescription>
+              צפה בפרטים המלאים של המשתמש לפני אישור או דחייה
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1.5 text-gray-700 dark:text-gray-300">
+                    שם מלא
+                  </label>
+                  <div className="p-2 rounded-lg border border-gray-300 dark:border-[#333333] bg-gray-50 dark:bg-[#1C1C1C]">
+                    {viewingPendingUser.name || 'לא מוגדר'}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1.5 text-gray-700 dark:text-gray-300">
+                    מספר אישי
+                  </label>
+                  <div className="p-2 rounded-lg border border-gray-300 dark:border-[#333333] bg-gray-50 dark:bg-[#1C1C1C]">
+                    {viewingPendingUser.personalNumber || 'לא מוגדר'}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1.5 text-gray-700 dark:text-gray-300">
+                    כתובת אימייל
+                  </label>
+                  <div className="p-2 rounded-lg border border-gray-300 dark:border-[#333333] bg-gray-50 dark:bg-[#1C1C1C]">
+                    {viewingPendingUser.email}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1.5 text-gray-700 dark:text-gray-300">
+                    סוג
+                  </label>
+                  <div className="p-2 rounded-lg border border-gray-300 dark:border-[#333333] bg-gray-50 dark:bg-[#1C1C1C]">
+                    {viewingPendingUser.type === 'CONSCRIPT' ? 'חובה' : viewingPendingUser.type === 'PERMANENT' ? 'קבע' : 'לא מוגדר'}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1.5 text-gray-700 dark:text-gray-300">
+                    מחלקה
+                  </label>
+                  <div className="p-2 rounded-lg border border-gray-300 dark:border-[#333333] bg-gray-50 dark:bg-[#1C1C1C]">
+                    {viewingPendingUser.department?.name || 'לא מוגדר'}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1.5 text-gray-700 dark:text-gray-300">
+                    תפקיד
+                  </label>
+                  <div className="p-2 rounded-lg border border-gray-300 dark:border-[#333333] bg-gray-50 dark:bg-[#1C1C1C]">
+                    {viewingPendingUser.role?.name || 'לא מוגדר'}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1.5 text-gray-700 dark:text-gray-300">
+                    מפקד
+                  </label>
+                  <div className="p-2 rounded-lg border border-gray-300 dark:border-[#333333] bg-gray-50 dark:bg-[#1C1C1C]">
+                    {viewingPendingUser.isCommander ? 'כן' : 'לא'}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1.5 text-gray-700 dark:text-gray-300">
+                    תאריך יצירה
+                  </label>
+                  <div className="p-2 rounded-lg border border-gray-300 dark:border-[#333333] bg-gray-50 dark:bg-[#1C1C1C]">
+                    {new Date(viewingPendingUser.createdAt).toLocaleDateString('he-IL')}
+                  </div>
+                </div>
+              </div>
+              <div className="flex gap-2 pt-2">
+                <Button
+                  onClick={() => handleApprove(viewingPendingUser.id)}
+                  className="flex-1 bg-green-600 hover:bg-green-700"
+                >
+                  אישור
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={() => {
+                    setViewingPendingUser(null);
+                    handleReject(viewingPendingUser.id);
+                  }}
+                  className="flex-1"
+                >
+                  דחייה
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setViewingPendingUser(null)}
+                >
+                  ביטול
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Reset Password Modal */}
       {showResetPassword && currentUser?.isAdmin && (
         <Card variant="default" className="animate-slide-up border-amber-200 dark:border-amber-800">
@@ -682,6 +797,14 @@ function UsersTab({ action }: { action?: string | null }) {
                         className="text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300"
                       >
                         <KeyRound className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => handleDeleteUser(user.id, user.email)}
+                        className="bg-red-600 hover:bg-red-700"
+                      >
+                        <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
                   )}

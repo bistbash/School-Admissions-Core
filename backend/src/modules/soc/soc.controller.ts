@@ -2,6 +2,9 @@ import { Request, Response, NextFunction } from 'express';
 import { SOCService, AuditLogFilter, IncidentUpdate } from './soc.service';
 import { ForbiddenError, NotFoundError } from '../../lib/errors';
 import { auditFromRequest } from '../../lib/audit';
+import { logger, getCorrelationId } from '../../lib/logger';
+import { logSOCAction, trackIncidentResolution } from '../../lib/soc-metrics';
+import { exportAuditLogsToCSV, exportAuditLogsToJSON, exportStatsToJSON } from '../../lib/soc-export';
 
 const socService = new SOCService();
 
@@ -11,6 +14,10 @@ export class SOCController {
    * GET /api/soc/audit-logs
    */
   async getAuditLogs(req: Request, res: Response, next: NextFunction) {
+    const startTime = Date.now();
+    const correlationId = getCorrelationId();
+    const user = (req as any).user;
+    
     try {
       const filter: AuditLogFilter = {
         userId: req.query.userId ? Number(req.query.userId) : undefined,
@@ -34,8 +41,27 @@ export class SOCController {
       });
 
       const result = await socService.getAuditLogs(filter);
+      const duration = Date.now() - startTime;
+      const resultCount = (result as any).logs?.length || 0;
+
+      logger.info({
+        type: 'soc_query',
+        operation: 'get_audit_logs',
+        userId: user?.userId,
+        filter,
+        resultCount,
+        duration,
+        correlationId,
+      }, 'SOC analyst queried audit logs');
+
       res.json(result);
     } catch (error) {
+      logger.error({
+        type: 'soc_error',
+        operation: 'get_audit_logs',
+        error: (error as Error).message,
+        correlationId,
+      }, 'Error querying audit logs');
       next(error);
     }
   }
@@ -128,14 +154,60 @@ export class SOCController {
    * PUT /api/soc/incidents/:id
    */
   async updateIncident(req: Request, res: Response, next: NextFunction) {
+    const correlationId = getCorrelationId();
+    const user = (req as any).user;
+    
     try {
       const logId = Number(req.params.id);
-      const user = (req as any).user;
       const update: IncidentUpdate = req.body;
       
+      // Get the incident before update to track resolution time
+      const { prisma } = await import('../../lib/prisma');
+      const beforeUpdate = await prisma.auditLog.findUnique({
+        where: { id: logId },
+        select: { createdAt: true, incidentStatus: true },
+      });
+      
+      if (!beforeUpdate) {
+        throw new NotFoundError('Incident');
+      }
+      
+      const incidentStartTime = beforeUpdate.createdAt;
+      
       const updated = await socService.updateIncident(logId, update, user?.userId);
+      
+      // Log SOC action
+      await logSOCAction(user?.userId || 0, 'UPDATE_INCIDENT', {
+        incidentId: logId,
+        update,
+        correlationId,
+      });
+
+      // Track resolution time if incident was resolved
+      if (update.incidentStatus === 'RESOLVED' || update.incidentStatus === 'FALSE_POSITIVE') {
+        if (incidentStartTime) {
+          const resolutionTime = Date.now() - new Date(incidentStartTime).getTime();
+          await trackIncidentResolution(logId, user?.userId || 0, resolutionTime);
+        }
+      }
+
+      logger.info({
+        type: 'soc_action',
+        operation: 'update_incident',
+        analystId: user?.userId,
+        incidentId: logId,
+        update,
+        correlationId,
+      }, `SOC analyst ${user?.userId} updated incident ${logId}`);
+
       res.json(updated);
     } catch (error) {
+      logger.error({
+        type: 'soc_error',
+        operation: 'update_incident',
+        error: (error as Error).message,
+        correlationId,
+      }, 'Error updating incident');
       next(error);
     }
   }
@@ -165,10 +237,27 @@ export class SOCController {
    * GET /api/soc/blocked-ips
    */
   async getBlockedIPs(req: Request, res: Response, next: NextFunction) {
+    const correlationId = getCorrelationId();
     try {
-      const blockedIPs = await socService.getBlockedIPs();
+      const includeExpired = req.query.includeExpired === 'true';
+      const blockedIPs = await socService.getBlockedIPs(includeExpired);
+      
+      logger.info({
+        type: 'soc_query',
+        operation: 'get_blocked_ips',
+        count: blockedIPs.length,
+        includeExpired,
+        correlationId,
+      }, 'SOC analyst retrieved blocked IPs');
+
       res.json(blockedIPs);
     } catch (error) {
+      logger.error({
+        type: 'soc_error',
+        operation: 'get_blocked_ips',
+        error: (error as Error).message,
+        correlationId,
+      }, 'Error retrieving blocked IPs');
       next(error);
     }
   }
@@ -178,9 +267,11 @@ export class SOCController {
    * POST /api/soc/block-ip
    */
   async blockIP(req: Request, res: Response, next: NextFunction) {
+    const correlationId = getCorrelationId();
+    const user = (req as any).user;
+    
     try {
       const { ipAddress, reason, expiresAt } = req.body;
-      const user = (req as any).user;
 
       if (!ipAddress) {
         return res.status(400).json({ error: 'IP address is required' });
@@ -188,8 +279,25 @@ export class SOCController {
 
       const expiresDate = expiresAt ? new Date(expiresAt) : undefined;
       const blocked = await socService.blockIP(ipAddress, reason, user?.userId, expiresDate);
+      
+      logger.info({
+        type: 'soc_action',
+        operation: 'block_ip',
+        analystId: user?.userId,
+        ipAddress,
+        reason,
+        expiresAt: expiresDate?.toISOString(),
+        correlationId,
+      }, `SOC analyst ${user?.userId} blocked IP ${ipAddress}`);
+
       res.json(blocked);
     } catch (error) {
+      logger.error({
+        type: 'soc_error',
+        operation: 'block_ip',
+        error: (error as Error).message,
+        correlationId,
+      }, 'Error blocking IP');
       next(error);
     }
   }
@@ -199,6 +307,9 @@ export class SOCController {
    * POST /api/soc/unblock-ip
    */
   async unblockIP(req: Request, res: Response, next: NextFunction) {
+    const correlationId = getCorrelationId();
+    const user = (req as any).user;
+    
     try {
       const { ipAddress } = req.body;
 
@@ -207,8 +318,23 @@ export class SOCController {
       }
 
       await socService.unblockIP(ipAddress);
+      
+      logger.info({
+        type: 'soc_action',
+        operation: 'unblock_ip',
+        analystId: user?.userId,
+        ipAddress,
+        correlationId,
+      }, `SOC analyst ${user?.userId} unblocked IP ${ipAddress}`);
+
       res.json({ message: 'IP address unblocked successfully' });
     } catch (error) {
+      logger.error({
+        type: 'soc_error',
+        operation: 'unblock_ip',
+        error: (error as Error).message,
+        correlationId,
+      }, 'Error unblocking IP');
       next(error);
     }
   }
@@ -292,6 +418,136 @@ export class SOCController {
 
       res.json({ message: 'Trusted user/IP removed successfully' });
     } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Export audit logs
+   * GET /api/soc/export/logs
+   */
+  async exportAuditLogs(req: Request, res: Response, next: NextFunction) {
+    const correlationId = getCorrelationId();
+    const user = (req as any).user;
+    const format = (req.query.format as string) || 'json';
+    
+    try {
+      const filter: AuditLogFilter = {
+        userId: req.query.userId ? Number(req.query.userId) : undefined,
+        userEmail: req.query.userEmail as string | undefined,
+        action: req.query.action as any,
+        resource: req.query.resource as any,
+        resourceId: req.query.resourceId ? Number(req.query.resourceId) : undefined,
+        status: req.query.status as any,
+        startDate: req.query.startDate ? new Date(req.query.startDate as string) : undefined,
+        endDate: req.query.endDate ? new Date(req.query.endDate as string) : undefined,
+        ipAddress: req.query.ipAddress as string | undefined,
+      };
+
+      // Remove undefined values
+      Object.keys(filter).forEach(key => {
+        if (filter[key as keyof AuditLogFilter] === undefined) {
+          delete filter[key as keyof AuditLogFilter];
+        }
+      });
+
+      let content: string;
+      let filename: string;
+      let contentType: string;
+
+      if (format === 'csv') {
+        content = await exportAuditLogsToCSV(filter);
+        filename = `audit-logs-${new Date().toISOString().split('T')[0]}.csv`;
+        contentType = 'text/csv';
+      } else {
+        content = await exportAuditLogsToJSON(filter);
+        filename = `audit-logs-${new Date().toISOString().split('T')[0]}.json`;
+        contentType = 'application/json';
+      }
+
+      logger.info({
+        type: 'soc_export',
+        operation: 'export_audit_logs',
+        analystId: user?.userId,
+        format,
+        correlationId,
+      }, `SOC analyst ${user?.userId} exported audit logs in ${format} format`);
+
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.send(content);
+    } catch (error) {
+      logger.error({
+        type: 'soc_error',
+        operation: 'export_audit_logs',
+        error: (error as Error).message,
+        correlationId,
+      }, 'Error exporting audit logs');
+      next(error);
+    }
+  }
+
+  /**
+   * Export statistics
+   * GET /api/soc/export/stats
+   */
+  async exportStats(req: Request, res: Response, next: NextFunction) {
+    const correlationId = getCorrelationId();
+    const user = (req as any).user;
+    
+    try {
+      const startDate = req.query.startDate ? new Date(req.query.startDate as string) : undefined;
+      const endDate = req.query.endDate ? new Date(req.query.endDate as string) : undefined;
+
+      const content = await exportStatsToJSON(startDate, endDate);
+      const filename = `stats-${new Date().toISOString().split('T')[0]}.json`;
+
+      logger.info({
+        type: 'soc_export',
+        operation: 'export_stats',
+        analystId: user?.userId,
+        correlationId,
+      }, `SOC analyst ${user?.userId} exported statistics`);
+
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.send(content);
+    } catch (error) {
+      logger.error({
+        type: 'soc_error',
+        operation: 'export_stats',
+        error: (error as Error).message,
+        correlationId,
+      }, 'Error exporting statistics');
+      next(error);
+    }
+  }
+
+  /**
+   * Get SOC metrics
+   * GET /api/soc/metrics
+   */
+  async getMetrics(req: Request, res: Response, next: NextFunction) {
+    const correlationId = getCorrelationId();
+    
+    try {
+      const { getSOCMetrics } = await import('../../lib/soc-metrics');
+      const metrics = await getSOCMetrics();
+
+      logger.info({
+        type: 'soc_query',
+        operation: 'get_metrics',
+        correlationId,
+      }, 'SOC metrics retrieved');
+
+      res.json(metrics);
+    } catch (error) {
+      logger.error({
+        type: 'soc_error',
+        operation: 'get_metrics',
+        error: (error as Error).message,
+        correlationId,
+      }, 'Error retrieving SOC metrics');
       next(error);
     }
   }

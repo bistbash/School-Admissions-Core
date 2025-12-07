@@ -1,5 +1,6 @@
 import { prisma } from '../../lib/prisma';
 import { AuditAction, AuditResource, AuditStatus } from '../../lib/audit';
+import { socCache, getAuditLogsCacheKey, getStatsCacheKey, invalidateSOCCache } from '../../lib/soc-cache';
 
 export interface AuditLogFilter {
   userId?: number;
@@ -44,6 +45,15 @@ export class SOCService {
    * Get audit logs with filtering
    */
   async getAuditLogs(filter: AuditLogFilter = {}) {
+    // Check cache first (only for read-only queries without pagination)
+    if (!filter.limit || filter.limit <= 100) {
+      const cacheKey = getAuditLogsCacheKey(filter);
+      const cached = socCache.get(cacheKey);
+      if (cached) {
+        return cached;
+      }
+    }
+
     const where: any = {};
 
     if (filter.userId) {
@@ -125,7 +135,7 @@ export class SOCService {
 
     const total = await prisma.auditLog.count({ where });
 
-    return {
+    const result = {
       logs: logs.map(log => ({
         ...log,
         details: log.details ? JSON.parse(log.details) : null,
@@ -134,12 +144,27 @@ export class SOCService {
       limit: filter.limit || 100,
       offset: filter.offset || 0,
     };
+
+    // Cache result if it's a small query
+    if (!filter.limit || filter.limit <= 100) {
+      const cacheKey = getAuditLogsCacheKey(filter);
+      socCache.set(cacheKey, result, 2 * 60 * 1000); // 2 minutes TTL
+    }
+
+    return result;
   }
 
   /**
    * Get audit log statistics
    */
   async getAuditStats(filter: Omit<AuditLogFilter, 'limit' | 'offset'> = {}): Promise<AuditLogStats> {
+    // Check cache
+    const cacheKey = getStatsCacheKey(filter.startDate, filter.endDate);
+    const cached = socCache.get<AuditLogStats>(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
     const where: any = {};
 
     if (filter.startDate || filter.endDate) {
@@ -230,6 +255,9 @@ export class SOCService {
       }
     }
 
+    // Cache statistics for 5 minutes
+    socCache.set(cacheKey, stats, 5 * 60 * 1000);
+
     return stats;
   }
 
@@ -315,6 +343,9 @@ export class SOCService {
       data: updateData,
     });
 
+    // Invalidate cache when incidents are updated
+    invalidateSOCCache();
+
     return {
       ...updated,
       details: updated.details ? JSON.parse(updated.details) : null,
@@ -375,11 +406,19 @@ export class SOCService {
   }
 
   /**
-   * Get all blocked IPs
+   * Get all blocked IPs (including expired ones for management)
    */
-  async getBlockedIPs() {
+  async getBlockedIPs(includeExpired: boolean = true) {
+    const where: any = {};
+    if (!includeExpired) {
+      where.isActive = true;
+      where.OR = [
+        { expiresAt: null },
+        { expiresAt: { gt: new Date() } },
+      ];
+    }
     return prisma.blockedIP.findMany({
-      where: { isActive: true },
+      where,
       orderBy: { blockedAt: 'desc' },
     });
   }
