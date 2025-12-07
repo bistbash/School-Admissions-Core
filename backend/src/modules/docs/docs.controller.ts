@@ -235,8 +235,8 @@ export class DocsController {
               type: 'object',
               fields: {
                 name: 'string (required)',
-                year: 'number (required)',
-                currentGrade: 'string (required)',
+                startYear: `number (required, min: 1954, max: ${new Date().getFullYear() + 1}) - שנת מחזור`,
+                currentGrade: 'string (required) - ט\', י\', י"א, י"ב, י"ג, או י"ד',
               },
             },
           },

@@ -1,27 +1,30 @@
+import dotenv from 'dotenv';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 import { Request, Response, NextFunction } from 'express';
 import { UnauthorizedError } from './errors';
 import { auditFromRequest } from './audit';
 
+// Load environment variables before checking JWT_SECRET
+// This ensures .env is loaded even if this module is imported before server.ts
+dotenv.config();
+
 // SECURITY: Enforce strong JWT_SECRET in production
 const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 const SALT_ROUNDS = 12;
 
+// SECURITY: JWT_SECRET is REQUIRED - no fallback allowed
+// This prevents accidental use of default secret in production
 if (!JWT_SECRET) {
-  if (process.env.NODE_ENV === 'production') {
-    throw new Error(
-      'CRITICAL: JWT_SECRET environment variable is required in production. ' +
-      'Generate a strong secret: openssl rand -base64 32'
-    );
-  }
-  // Development fallback (warn but allow)
-  console.warn('⚠️  WARNING: Using default JWT_SECRET. This is INSECURE for production!');
-  console.warn('⚠️  Set JWT_SECRET environment variable: openssl rand -base64 32');
+  throw new Error(
+    'CRITICAL SECURITY ERROR: JWT_SECRET environment variable is REQUIRED. ' +
+    'The application cannot start without a secure JWT secret. ' +
+    'Generate a strong secret: openssl rand -base64 32'
+  );
 }
 
-const SECRET = JWT_SECRET || 'your-super-secret-jwt-key-change-in-production-DEVELOPMENT-ONLY';
+const SECRET = JWT_SECRET;
 
 export interface JwtPayload {
   userId: number;

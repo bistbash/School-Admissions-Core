@@ -60,14 +60,14 @@ export class StudentsUploadService {
     track: string | undefined,
     academicYear: number
   ) {
-    const existingClass = await prisma.class.findUnique({
+    // When track or parallel is null, we can't use findUnique with the composite key
+    // Use findFirst instead to handle null values properly
+    const existingClass = await prisma.class.findFirst({
       where: {
-        grade_parallel_track_academicYear: {
-          grade,
-          parallel: parallel || null,
-          track: track || null,
-          academicYear,
-        },
+        grade,
+        parallel: parallel || null,
+        track: track || null,
+        academicYear,
       },
     });
 
@@ -141,6 +141,18 @@ export class StudentsUploadService {
     }
 
     const year = startYear || new Date().getFullYear();
+    
+    // Validate startYear range: 1954 to current year + 1
+    const currentYear = new Date().getFullYear();
+    const minYear = 1954;
+    const maxYear = currentYear + 1;
+    
+    if (year < minYear || year > maxYear) {
+      throw new ValidationError(
+        `שנת מחזור חייבת להיות בין ${minYear} ל-${maxYear}. התקבל: ${year}`
+      );
+    }
+    
     const name = cohortName || `מחזור ${year}`;
 
     // Try to find existing cohort
@@ -264,6 +276,17 @@ export class StudentsUploadService {
           typeof row['מחזור'] === 'number' ? row['מחזור'] : cohortYear
         );
 
+        // Get cohort to extract startYear for studyStartDate
+        const cohort = await prisma.cohort.findUnique({
+          where: { id: cohortId },
+          select: { startYear: true },
+        });
+
+        // Use cohort startYear (September 1st) as studyStartDate, or current date as fallback
+        const studyStartDate = cohort 
+          ? new Date(cohort.startYear, 8, 1) // September 1st of cohort year
+          : new Date();
+
         // Check if student exists
         const existing = await prisma.student.findUnique({
           where: { idNumber },
@@ -280,6 +303,7 @@ export class StudentsUploadService {
           parallel,
           track,
           cohortId,
+          studyStartDate, // Required: date when student started studying
           academicYear,
           // Additional fields
           dateOfBirth: parseDate(row['תאריך לידה']),

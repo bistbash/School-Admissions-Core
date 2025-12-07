@@ -18,6 +18,8 @@ const createStudentSchema = z.object({
   parallel: z.enum(['1', '2', '3', '4', '5', '6', '7', '8']).optional(),
   track: z.string().optional(),
   cohortId: z.number().int().positive('Cohort ID must be a positive integer'),
+  studyStartDate: z.string().datetime({ message: 'Study start date must be a valid ISO date string' })
+    .or(z.date({ message: 'Study start date must be a valid date' })),
 });
 
 const updateStudentSchema = z.object({
@@ -41,6 +43,10 @@ export class StudentsController {
     try {
       const validated = createStudentSchema.parse(req.body);
       const result = await studentsService.create(validated);
+      
+      if (!result) {
+        throw new Error('Failed to create student');
+      }
       
       // Log creation
       await auditFromRequest(req, 'CREATE', 'STUDENT', {

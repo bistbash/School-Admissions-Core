@@ -1,9 +1,15 @@
 import { Request } from 'express';
 import { prisma } from './prisma';
 
+// Simple in-memory cache for trusted user checks (5 minute TTL)
+// This helps reduce database load during bulk operations
+const trustedUserCache = new Map<string, { result: boolean; expiresAt: number }>();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 /**
  * Check if a user is trusted (whitelisted)
  * Checks by userId, IP address, or email
+ * Includes retry logic and caching to prevent Prisma panics during bulk operations
  */
 export async function isTrustedUser(
   userId?: number,
@@ -11,6 +17,13 @@ export async function isTrustedUser(
   email?: string
 ): Promise<boolean> {
   try {
+    // Check cache first
+    const cacheKey = `trusted:${userId || ''}:${ipAddress || ''}:${email || ''}`;
+    const cached = trustedUserCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.result;
+    }
+
     const now = new Date();
     
     // Build OR conditions for userId, ipAddress, email
@@ -23,26 +36,55 @@ export async function isTrustedUser(
       return false; // No conditions to check
     }
 
-    const trusted = await prisma.trustedUser.findFirst({
-      where: {
-        isActive: true,
-        AND: [
-          {
-            OR: userConditions,
-          },
-          {
-            OR: [
-              { expiresAt: null },
-              { expiresAt: { gt: now } },
+    // Retry logic to handle Prisma panics during high load
+    let lastError: any = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const trusted = await prisma.trustedUser.findFirst({
+          where: {
+            isActive: true,
+            AND: [
+              {
+                OR: userConditions,
+              },
+              {
+                OR: [
+                  { expiresAt: null },
+                  { expiresAt: { gt: now } },
+                ],
+              },
             ],
           },
-        ],
-      },
-    });
+        });
 
-    return !!trusted;
+        const result = !!trusted;
+        
+        // Cache the result
+        trustedUserCache.set(cacheKey, {
+          result,
+          expiresAt: Date.now() + CACHE_TTL,
+        });
+
+        return result;
+      } catch (error: any) {
+        lastError = error;
+        
+        // If it's a Prisma panic, wait a bit before retrying
+        if (error.name === 'PrismaClientRustPanicError' && attempt < 2) {
+          await new Promise(resolve => setTimeout(resolve, 100 * (attempt + 1))); // 100ms, 200ms, 300ms
+          continue;
+        }
+        
+        // For other errors or last attempt, throw
+        throw error;
+      }
+    }
+
+    // If all retries failed, log and return false (fail open for availability)
+    console.error('Error checking trusted user status after retries:', lastError);
+    return false;
   } catch (error) {
-    // If Prisma crashes, log error but don't block requests
+    // If Prisma crashes, log error but don't block requests (fail open)
     console.error('Error checking trusted user status:', error);
     return false;
   }

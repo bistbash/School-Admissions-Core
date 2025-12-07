@@ -16,7 +16,9 @@ export type AuditAction =
   | 'AUTH_SUCCESS'
   | 'TOKEN_EXPIRED'
   | 'UNAUTHORIZED_ACCESS'
-  | 'RATE_LIMIT_EXCEEDED';
+  | 'RATE_LIMIT_EXCEEDED'
+  | 'CSRF_ATTEMPT'
+  | 'ADMIN_ACCESS';
 
 export type AuditResource = 
   | 'AUTH'
@@ -29,7 +31,10 @@ export type AuditResource =
   | 'STUDENT'
   | 'COHORT'
   | 'STUDENT_EXIT'
-  | 'API_KEY';
+  | 'API_KEY'
+  | 'TRUSTED_USER'
+  | 'SECURITY'
+  | 'PERMISSION';
 
 export type AuditStatus = 'SUCCESS' | 'FAILURE' | 'ERROR';
 

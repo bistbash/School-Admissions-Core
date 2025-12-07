@@ -9,7 +9,8 @@ export interface CreateStudentData {
   grade: string; // י', י"א, י"ב, י"ג, י"ד
   parallel?: string;
   track?: string;
-  cohortId: number;
+  cohortId: number; // Required - cohort with startYear
+  studyStartDate: Date | string; // Required - date when student started studying
   academicYear?: number; // Optional - defaults to current academic year
   // Additional fields
   dateOfBirth?: Date;
@@ -90,15 +91,14 @@ export class StudentsService {
     track: string | undefined,
     academicYear: number
   ) {
-    // Try to find existing class
-    const existingClass = await prisma.class.findUnique({
+    // When track or parallel is null, we can't use findUnique with the composite key
+    // Use findFirst instead to handle null values properly
+    const existingClass = await prisma.class.findFirst({
       where: {
-        grade_parallel_track_academicYear: {
-          grade,
-          parallel: parallel || null,
-          track: track || null,
-          academicYear,
-        },
+        grade,
+        parallel: parallel || null,
+        track: track || null,
+        academicYear,
       },
     });
 
@@ -194,6 +194,7 @@ export class StudentsService {
         parallel: data.parallel,
         track: data.track,
         cohortId: data.cohortId,
+        studyStartDate: data.studyStartDate instanceof Date ? data.studyStartDate : new Date(data.studyStartDate),
         status: 'ACTIVE',
         // Additional fields
         dateOfBirth: data.dateOfBirth,
@@ -333,69 +334,104 @@ export class StudentsService {
 
   /**
    * Get student by ID
+   * Includes retry logic to handle Prisma panics during high load
+   * Uses separate queries to avoid complex nested queries that cause Prisma panics
    */
   async getById(id: number, includeHistory: boolean = true) {
-    const student = await prisma.student.findUnique({
-      where: { id },
-      include: {
-        cohort: true,
-        exitRecord: true,
-        enrollments: includeHistory ? {
-          include: {
-            class: true,
-          },
-          orderBy: {
-            enrollmentDate: 'desc',
-          },
-        } : {
-          where: {
-            class: {
-              academicYear: this.getCurrentAcademicYear(),
-            },
-          },
-          include: {
-            class: true,
-          },
-          orderBy: {
-            enrollmentDate: 'desc',
-          },
-          take: 1,
+    const { retryPrismaOperation } = await import('../../lib/prisma-retry');
+    
+    return retryPrismaOperation(async () => {
+      // Fetch student with basic includes first (simpler query)
+      const student = await prisma.student.findUnique({
+        where: { id },
+        include: {
+          cohort: true,
+          exitRecord: true,
         },
-      },
+      });
+
+      if (!student) {
+        throw new NotFoundError('Student');
+      }
+
+      // Fetch enrollments separately to avoid complex nested queries that cause Prisma panics
+      // This is more reliable than nested where clauses in includes
+      let enrollments: any[] = [];
+      if (includeHistory) {
+        // Get all enrollments
+        enrollments = await prisma.enrollment.findMany({
+          where: { studentId: id },
+          include: {
+            class: true,
+          },
+          orderBy: {
+            enrollmentDate: 'desc',
+          },
+        });
+      } else {
+        // Get only current academic year enrollment
+        const currentYear = this.getCurrentAcademicYear();
+        const allEnrollments = await prisma.enrollment.findMany({
+          where: { studentId: id },
+          include: {
+            class: true,
+          },
+          orderBy: {
+            enrollmentDate: 'desc',
+          },
+        });
+        
+          // Filter in JavaScript to avoid complex nested where clause
+          enrollments = allEnrollments.filter(
+            (e: any) => e.class.academicYear === currentYear
+          ).slice(0, 1);
+      }
+
+      return {
+        ...student,
+        enrollments,
+      };
     });
-
-    if (!student) {
-      throw new NotFoundError('Student');
-    }
-
-    return student;
   }
 
   /**
    * Get student by ID number
+   * Includes retry logic to handle Prisma panics during high load
+   * Uses separate queries to avoid complex nested queries
    */
   async getByIdNumber(idNumber: string) {
-    const student = await prisma.student.findUnique({
-      where: { idNumber },
-      include: {
-        cohort: true,
-        exitRecord: true,
-        enrollments: {
-          include: {
-            class: true,
-          },
-          orderBy: {
-            enrollmentDate: 'desc',
-          },
+    const { retryPrismaOperation } = await import('../../lib/prisma-retry');
+    
+    return retryPrismaOperation(async () => {
+      // Fetch student with basic includes first (simpler query)
+      const student = await prisma.student.findUnique({
+        where: { idNumber },
+        include: {
+          cohort: true,
+          exitRecord: true,
         },
-      },
+      });
+
+      if (!student) {
+        throw new NotFoundError('Student');
+      }
+
+      // Fetch enrollments separately to avoid complex nested queries
+      const enrollments = await prisma.enrollment.findMany({
+        where: { studentId: student.id },
+        include: {
+          class: true,
+        },
+        orderBy: {
+          enrollmentDate: 'desc',
+        },
+      });
+
+      return {
+        ...student,
+        enrollments,
+      };
     });
-
-    if (!student) {
-      throw new NotFoundError('Student');
-    }
-
-    return student;
   }
 
   /**
@@ -469,7 +505,13 @@ export class StudentsService {
       const track = data.track !== undefined ? data.track : student.track;
 
       if (grade) {
-        const classRecord = await this.findOrCreateClass(grade, parallel, track, academicYear);
+        // Convert null to undefined for findOrCreateClass
+        const classRecord = await this.findOrCreateClass(
+          grade, 
+          parallel ?? undefined, 
+          track ?? undefined, 
+          academicYear
+        );
         
         // Check if enrollment already exists for this class and year
         const existingEnrollment = await prisma.enrollment.findFirst({

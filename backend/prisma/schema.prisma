@@ -14,28 +14,34 @@ model Department {
 }
 
 model Role {
-  id       Int       @id @default(autoincrement())
-  name     String
-  soldiers Soldier[]
+  id             Int             @id @default(autoincrement())
+  name           String
+  soldiers       Soldier[]
+  rolePermissions RolePermission[]
 }
 
 model Soldier {
-  id             Int        @id @default(autoincrement())
-  personalNumber String     @unique
-  name           String
-  email          String     @unique
-  password       String // Hashed password
-  type           String // "CONSCRIPT" or "PERMANENT"
-  department     Department @relation(fields: [departmentId], references: [id])
-  departmentId   Int
-  role           Role?      @relation(fields: [roleId], references: [id])
-  roleId         Int?
-  isCommander    Boolean    @default(false)
-  isAdmin        Boolean    @default(false) // Admin user - first registered user becomes admin
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
+  id                    Int        @id @default(autoincrement())
+  personalNumber        String?    @unique // Optional - filled on first login
+  name                  String? // Optional - filled on first login
+  email                 String     @unique
+  password              String // Hashed password (temporary password set by admin)
+  type                  String? // "CONSCRIPT" or "PERMANENT" - Optional, filled on first login
+  department            Department? @relation(fields: [departmentId], references: [id])
+  departmentId          Int?
+  role                  Role?      @relation(fields: [roleId], references: [id])
+  roleId                Int?
+  isCommander           Boolean    @default(false)
+  isAdmin               Boolean    @default(false) // Admin user - first registered user becomes admin
+  approvalStatus        String     @default("CREATED") // CREATED, PENDING, APPROVED, REJECTED
+  needsProfileCompletion Boolean   @default(true) // True if user needs to complete profile on first login
+  createdAt             DateTime   @default(now())
+  updatedAt             DateTime   @updatedAt
+  permissions           UserPermission[] // User permissions
   
   @@index([isAdmin])
+  @@index([approvalStatus])
+  @@index([needsProfileCompletion])
 }
 
 model Room {
@@ -150,6 +156,7 @@ model Student {
   track     String? // Track/major (deprecated - use Enrollment)
   cohortId  Int // Starting cohort
   cohort    Cohort  @relation(fields: [cohortId], references: [id])
+  studyStartDate DateTime // Date when student started studying (required)
   status    String  @default("ACTIVE") // ACTIVE, GRADUATED, LEFT, ARCHIVED
 
   // Additional fields from mashov system
@@ -243,4 +250,52 @@ model StudentExit {
   @@index([studentId])
   @@index([hasLeft])
   @@index([exitDate])
+}
+
+model Permission {
+  id             Int             @id @default(autoincrement())
+  name           String          @unique // Permission name (e.g., "students.read", "students.write")
+  description    String? // Description of what this permission allows
+  resource       String // Resource type (e.g., "students", "cohorts", "users")
+  action         String // Action type (e.g., "read", "write", "delete", "manage")
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  userPermissions UserPermission[]
+  rolePermissions RolePermission[]
+
+  @@index([resource])
+  @@index([action])
+  @@index([resource, action])
+}
+
+model UserPermission {
+  id           Int       @id @default(autoincrement())
+  userId       Int // User ID
+  user         Soldier   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permissionId Int // Permission ID
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  grantedBy   Int? // Admin user ID who granted this permission
+  grantedAt    DateTime  @default(now())
+  isActive     Boolean   @default(true) // Can be deactivated without deleting
+
+  @@unique([userId, permissionId])
+  @@index([userId])
+  @@index([permissionId])
+  @@index([isActive])
+}
+
+model RolePermission {
+  id           Int       @id @default(autoincrement())
+  roleId       Int // Role ID
+  role         Role      @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permissionId Int // Permission ID
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  grantedBy   Int? // Admin user ID who granted this permission
+  grantedAt    DateTime  @default(now())
+  isActive     Boolean   @default(true) // Can be deactivated without deleting
+
+  @@unique([roleId, permissionId])
+  @@index([roleId])
+  @@index([permissionId])
+  @@index([isActive])
 }

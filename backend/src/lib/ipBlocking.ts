@@ -1,16 +1,44 @@
 import { Request, Response, NextFunction } from 'express';
-import { prisma } from './prisma';
+import { prisma, recreatePrisma } from './prisma';
 import { ForbiddenError } from './errors';
 import { isTrustedUser } from './trustedUsers';
+import { PrismaClientRustPanicError } from '@prisma/client/runtime/library';
+import { retryPrismaOperation } from './prisma-retry';
 
 /**
  * Check if an IP address is blocked
- * IMPORTANT: Trusted users are never blocked
+ * IMPORTANT: Admin and trusted users are never blocked
  */
 export async function isIPBlocked(ipAddress: string, userId?: number): Promise<boolean> {
   if (!ipAddress) return false;
 
-  // Check if user is trusted first - trusted users are never blocked
+  // Check if user is admin first - admins are never blocked
+  if (userId) {
+    try {
+      // Use dynamic import to get the latest Prisma Client instance
+      const { prisma: prismaClient } = await import('./prisma');
+      const soldier = await retryPrismaOperation(async () => {
+        const client = await import('./prisma').then(m => m.prisma);
+        return client.soldier.findUnique({
+          where: { id: userId },
+          select: { isAdmin: true },
+        });
+      });
+      
+      if (soldier?.isAdmin) {
+        return false; // Admins are never blocked
+      }
+    } catch (error) {
+      // If check fails, continue to other checks
+      if (error instanceof PrismaClientRustPanicError || (error as any)?.name === 'PrismaClientRustPanicError') {
+        console.error('Prisma panic while checking admin status, recreating client...');
+        await recreatePrisma().catch(console.error);
+      }
+      console.error('Error checking admin status:', error);
+    }
+  }
+
+  // Check if user is trusted - trusted users are never blocked
   if (userId) {
     const isTrusted = await isTrustedUser(userId, ipAddress);
     if (isTrusted) {
@@ -25,20 +53,28 @@ export async function isIPBlocked(ipAddress: string, userId?: number): Promise<b
   }
 
   try {
-    const blocked = await prisma.blockedIP.findFirst({
-      where: {
-        ipAddress,
-        isActive: true,
-        OR: [
-          { expiresAt: null },
-          { expiresAt: { gt: new Date() } },
-        ],
-      },
+    const blocked = await retryPrismaOperation(async () => {
+      // Get fresh Prisma Client instance
+      const { prisma: prismaClient } = await import('./prisma');
+      return prismaClient.blockedIP.findFirst({
+        where: {
+          ipAddress,
+          isActive: true,
+          OR: [
+            { expiresAt: null },
+            { expiresAt: { gt: new Date() } },
+          ],
+        },
+      });
     });
 
     return !!blocked;
   } catch (error) {
     // If Prisma crashes, log error but don't block requests
+    if (error instanceof PrismaClientRustPanicError || (error as any)?.name === 'PrismaClientRustPanicError') {
+      console.error('Prisma panic while checking IP block status, recreating client...');
+      await recreatePrisma().catch(console.error);
+    }
     console.error('Error checking IP block status:', error);
     return false;
   }

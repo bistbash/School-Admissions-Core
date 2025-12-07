@@ -18,6 +18,17 @@ export class CohortsService {
    * Create a new cohort
    */
   async create(data: CreateCohortData) {
+    // Validate startYear range: 1954 to current year + 1
+    const currentYear = new Date().getFullYear();
+    const minYear = 1954;
+    const maxYear = currentYear + 1;
+    
+    if (data.startYear < minYear || data.startYear > maxYear) {
+      throw new ValidationError(
+        `שנת מחזור חייבת להיות בין ${minYear} ל-${maxYear}. התקבל: ${data.startYear}`
+      );
+    }
+    
     // Check if name already exists
     const existing = await (prisma as any).cohort.findUnique({
       where: { name: data.name },

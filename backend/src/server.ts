@@ -12,7 +12,10 @@ import apiKeysRoutes from './modules/api-keys/api-keys.routes';
 import studentsRoutes from './modules/students/students.routes';
 import studentExitsRoutes from './modules/student-exits/student-exits.routes';
 import cohortsRoutes from './modules/cohorts/cohorts.routes';
+import classesRoutes from './modules/classes/classes.routes';
 import docsRoutes from './modules/docs/docs.routes';
+import permissionsRoutes from './modules/permissions/permissions.routes';
+import searchRoutes from './modules/search/search.routes';
 import { errorHandler } from './lib/errors';
 import { auditMiddleware } from './lib/audit';
 import { ipBlockingMiddleware } from './lib/ipBlocking';
@@ -97,8 +100,11 @@ app.use('/api/rooms', roomsRoutes);
 app.use('/api/students', studentsRoutes);
 app.use('/api/student-exits', studentExitsRoutes);
 app.use('/api/cohorts', cohortsRoutes);
+app.use('/api/classes', classesRoutes);
 app.use('/api/soc', socRoutes);
 app.use('/api/docs', docsRoutes);
+app.use('/api/permissions', permissionsRoutes);
+app.use('/api/search', searchRoutes);
 
 app.get('/', (req, res) => {
   res.json({ message: 'Military Resource Management API is running' });

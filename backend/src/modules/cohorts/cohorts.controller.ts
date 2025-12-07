@@ -6,7 +6,9 @@ const cohortsService = new CohortsService();
 
 const createCohortSchema = z.object({
   name: z.string().min(1, 'Name is required'),
-  startYear: z.number().int().min(2000).max(2100),
+  startYear: z.number().int()
+    .min(1954, 'שנת מחזור חייבת להיות 1954 או מאוחר יותר')
+    .max(new Date().getFullYear() + 1, `שנת מחזור חייבת להיות ${new Date().getFullYear() + 1} או מוקדם יותר`),
   currentGrade: z.enum(['ט\'', 'י\'', 'י"א', 'י"ב', 'י"ג', 'י"ד'], {
     errorMap: () => ({ message: 'Grade must be ט\', י\', י"א, י"ב, י"ג, or י"ד' }),
   }),

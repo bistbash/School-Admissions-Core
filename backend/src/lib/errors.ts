@@ -55,6 +55,16 @@ export const errorHandler = (
     });
   }
 
+  // Handle Prisma panics (Query Engine crashes)
+  if (err && typeof err === 'object' && 'name' in err && err.name === 'PrismaClientRustPanicError') {
+    // SECURITY: Log only error type, not full error object
+    console.error('Prisma Query Engine panic detected');
+    return res.status(503).json({
+      error: 'Database temporarily unavailable. Please try again in a moment.',
+      retryAfter: 5, // seconds
+    });
+  }
+
   // Handle Prisma errors
   if (err && typeof err === 'object' && 'code' in err) {
     const prismaError = err as any;
@@ -81,12 +91,22 @@ export const errorHandler = (
     }
   }
 
-  // Log unexpected errors
-  console.error('Unexpected error:', err);
+  // Log unexpected errors (sanitized - no sensitive data)
+  // SECURITY: Only log error type and message, never stack traces or sensitive data
+  const sanitizedError = {
+    name: err?.name || 'Error',
+    message: err?.message || 'Unknown error',
+    // Never log stack traces or full error objects in production
+  };
+  console.error('Unexpected error:', sanitizedError);
 
+  // SECURITY: Only expose detailed error info in development with explicit debug flag
+  // This prevents information leakage in staging/production environments
+  const isDebugMode = process.env.NODE_ENV === 'development' && process.env.ALLOW_DEBUG === 'true';
+  
   return res.status(500).json({
     error: 'Internal server error',
-    ...(process.env.NODE_ENV === 'development' ? { message: err.message, stack: err.stack } : {}),
+    ...(isDebugMode ? { message: err.message, stack: err.stack } : {}),
   });
 };
 

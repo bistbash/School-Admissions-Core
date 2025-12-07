@@ -4,6 +4,9 @@ import { verifyAPIKey, getAPIKeyInfo } from './apiKeys';
 import { auditFromRequest } from './audit';
 import { isRequestFromTrustedUser } from './trustedUsers';
 import rateLimit from 'express-rate-limit';
+import { PermissionsService } from '../modules/permissions/permissions.service';
+
+const permissionsService = new PermissionsService();
 
 /**
  * Middleware to require API key authentication OR JWT token
@@ -191,10 +194,14 @@ export async function requireAdmin(req: Request, res: Response, next: NextFuncti
  * Rate limiting configuration
  * Limits requests to prevent abuse
  * Trusted users (developers/admins) are exempt from rate limiting
+ * 
+ * UPDATED: Increased limits significantly to allow continuous work
+ * - Normal users: 5000 requests per 15 minutes (~333 requests/minute)
+ * - This allows for intensive searching and continuous work without IP bans
  */
 export const apiRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per windowMs
+  max: 5000, // Limit each IP to 5000 requests per windowMs (~333 requests/minute)
   message: 'Too many requests from this IP, please try again later.',
   standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
@@ -222,13 +229,17 @@ export const apiRateLimiter = rateLimit({
 /**
  * Strict rate limiter for sensitive operations
  * Trusted users have higher limits but are still rate limited
+ * 
+ * UPDATED: Increased limits significantly to allow continuous work
+ * - Normal users: 500 requests per 15 minutes (~33 requests/minute)
+ * - Trusted users: 2000 requests per 15 minutes (~133 requests/minute)
  */
 export const strictRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: async (req: Request) => {
     // Trusted users get higher limits
     const isTrusted = await isRequestFromTrustedUser(req);
-    return isTrusted ? 100 : 10; // Trusted: 100, Regular: 10
+    return isTrusted ? 2000 : 500; // Trusted: 2000, Regular: 500
   },
   message: 'Too many requests from this IP, please try again later.',
   standardHeaders: true,
@@ -252,6 +263,7 @@ export const strictRateLimiter = rateLimit({
 /**
  * File upload rate limiter
  * Allows larger files and more uploads for trusted users and admins
+ * Admin users are completely exempt from rate limiting
  */
 export const fileUploadRateLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
@@ -260,12 +272,17 @@ export const fileUploadRateLimiter = rateLimit({
     const user = (req as any).user;
     let isAdmin = false;
     if (user?.userId) {
-      const { prisma } = await import('./prisma');
-      const soldier = await prisma.soldier.findUnique({
-        where: { id: user.userId },
-        select: { isAdmin: true },
-      });
-      isAdmin = soldier?.isAdmin || false;
+      try {
+        const { prisma } = await import('./prisma');
+        const soldier = await prisma.soldier.findUnique({
+          where: { id: user.userId },
+          select: { isAdmin: true },
+        });
+        isAdmin = soldier?.isAdmin || false;
+      } catch (error) {
+        // If check fails, continue with normal rate limiting
+        console.error('Error checking admin status for rate limiter:', error);
+      }
     }
     
     // Admin: unlimited, Trusted: 100 uploads/hour, Regular: 5 uploads/hour
@@ -275,6 +292,26 @@ export const fileUploadRateLimiter = rateLimit({
     
     const isTrusted = await isRequestFromTrustedUser(req);
     return isTrusted ? 100 : 5; // Trusted: 100 uploads/hour, Regular: 5 uploads/hour
+  },
+  skip: async (req: Request) => {
+    // Skip rate limiting for admin users completely
+    const user = (req as any).user;
+    if (user?.userId) {
+      try {
+        const { prisma } = await import('./prisma');
+        const soldier = await prisma.soldier.findUnique({
+          where: { id: user.userId },
+          select: { isAdmin: true },
+        });
+        if (soldier?.isAdmin) {
+          return true; // Skip rate limiting for admins
+        }
+      } catch (error) {
+        // If check fails, don't skip
+        console.error('Error checking admin status for rate limiter skip:', error);
+      }
+    }
+    return false; // Don't skip for non-admins
   },
   message: 'Too many file uploads. Please try again later.',
   standardHeaders: true,
@@ -294,4 +331,185 @@ export const fileUploadRateLimiter = rateLimit({
     });
   },
 });
+
+/**
+ * Registration rate limiter
+ * SECURITY: Limits registration attempts to prevent abuse
+ * Each IP can only register once per hour (additional check in service ensures only one pending user per IP)
+ */
+export const registrationRateLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 1, // Only 1 registration attempt per hour per IP
+  message: 'You can only register once per hour. If you have a pending registration, please wait for admin approval.',
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: async (req: Request, res: Response) => {
+    await auditFromRequest(req, 'RATE_LIMIT_EXCEEDED', 'SYSTEM', {
+      status: 'FAILURE',
+      errorMessage: 'Registration rate limit exceeded',
+      details: {
+        endpoint: req.path,
+        method: req.method,
+        email: req.body?.email,
+      },
+    }).catch(console.error);
+    
+    res.status(429).json({
+      error: 'You can only register once per hour. If you have a pending registration, please wait for admin approval.',
+    });
+  },
+});
+
+/**
+ * Login rate limiter - Brute Force Protection
+ * SECURITY: Limits login attempts to prevent brute force attacks
+ * - Normal users: 5 attempts per 15 minutes
+ * - Trusted users: 20 attempts per 15 minutes
+ * - Admins: 50 attempts per 15 minutes
+ * - Only counts failed attempts (skipSuccessfulRequests: true)
+ */
+export const loginRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: async (req: Request) => {
+    // Check if user is admin
+    const user = (req as any).user;
+    let isAdmin = false;
+    if (user?.userId) {
+      try {
+        const { prisma } = await import('./prisma');
+        const soldier = await prisma.soldier.findUnique({
+          where: { id: user.userId },
+          select: { isAdmin: true },
+        });
+        isAdmin = soldier?.isAdmin || false;
+      } catch (error) {
+        // If check fails, continue with normal rate limiting
+        console.error('Error checking admin status for login rate limiter:', error);
+      }
+    }
+    
+    const isTrusted = await isRequestFromTrustedUser(req);
+    
+    // Admin: 50, Trusted: 20, Regular: 5 login attempts per 15 minutes
+    if (isAdmin) {
+      return 50;
+    }
+    return isTrusted ? 20 : 5;
+  },
+  skipSuccessfulRequests: true, // Only count failed login attempts
+  message: 'Too many login attempts. Please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: async (req: Request, res: Response) => {
+    await auditFromRequest(req, 'RATE_LIMIT_EXCEEDED', 'AUTH', {
+      status: 'FAILURE',
+      errorMessage: 'Login rate limit exceeded - possible brute force attack',
+      details: {
+        endpoint: req.path,
+        method: req.method,
+        email: req.body?.email, // Log email for security monitoring
+      },
+    }).catch(console.error);
+    
+    res.status(429).json({
+      error: 'Too many login attempts. Please try again in 15 minutes.',
+      retryAfter: 15 * 60, // seconds
+    });
+  },
+});
+
+/**
+ * Middleware to require a specific permission
+ * Usage: requirePermission('students.read')
+ */
+export function requirePermission(permissionName: string) {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const user = (req as any).user;
+      const apiKey = (req as any).apiKey;
+      
+      if (!user && !apiKey) {
+        throw new UnauthorizedError('Authentication required');
+      }
+
+      // Get userId from user or API key
+      const userId = user?.userId || apiKey?.userId;
+      
+      if (!userId) {
+        throw new UnauthorizedError('User ID not found');
+      }
+
+      // Check permission
+      const hasPermission = await permissionsService.hasPermission(userId, permissionName);
+
+      if (!hasPermission) {
+        // Log unauthorized access attempt
+        await auditFromRequest(req, 'UNAUTHORIZED_ACCESS', 'PERMISSION', {
+          status: 'FAILURE',
+          errorMessage: `Permission required: ${permissionName}`,
+          details: {
+            endpoint: req.path,
+            method: req.method,
+            userId,
+            requiredPermission: permissionName,
+          },
+        }).catch(console.error);
+        
+        throw new ForbiddenError(`Permission required: ${permissionName}`);
+      }
+
+      next();
+    } catch (error) {
+      next(error);
+    }
+  };
+}
+
+/**
+ * Middleware to require permission for a resource and action
+ * Usage: requireResourcePermission('students', 'read')
+ */
+export function requireResourcePermission(resource: string, action: string) {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const user = (req as any).user;
+      const apiKey = (req as any).apiKey;
+      
+      if (!user && !apiKey) {
+        throw new UnauthorizedError('Authentication required');
+      }
+
+      // Get userId from user or API key
+      const userId = user?.userId || apiKey?.userId;
+      
+      if (!userId) {
+        throw new UnauthorizedError('User ID not found');
+      }
+
+      // Check permission
+      const hasPermission = await permissionsService.hasResourcePermission(userId, resource, action);
+
+      if (!hasPermission) {
+        // Log unauthorized access attempt
+        await auditFromRequest(req, 'UNAUTHORIZED_ACCESS', 'PERMISSION', {
+          status: 'FAILURE',
+          errorMessage: `Permission required: ${resource}.${action}`,
+          details: {
+            endpoint: req.path,
+            method: req.method,
+            userId,
+            requiredResource: resource,
+            requiredAction: action,
+          },
+        }).catch(console.error);
+        
+        throw new ForbiddenError(`Permission required: ${resource}.${action}`);
+      }
+
+      next();
+    } catch (error) {
+      next(error);
+    }
+  };
+}
 
