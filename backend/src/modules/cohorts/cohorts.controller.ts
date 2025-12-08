@@ -1,17 +1,16 @@
 import { Request, Response, NextFunction } from 'express';
 import { CohortsService, CreateCohortData, UpdateCohortData } from './cohorts.service';
 import { z } from 'zod';
+import { auditFromRequest } from '../../lib/audit/audit';
 
 const cohortsService = new CohortsService();
 
 const createCohortSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   startYear: z.number().int()
-    .min(1954, 'שנת מחזור חייבת להיות 1954 או מאוחר יותר')
+    .min(1973, 'שנת מחזור חייבת להיות 1973 או מאוחר יותר')
     .max(new Date().getFullYear() + 1, `שנת מחזור חייבת להיות ${new Date().getFullYear() + 1} או מוקדם יותר`),
-  currentGrade: z.enum(['ט\'', 'י\'', 'י"א', 'י"ב', 'י"ג', 'י"ד'], {
-    errorMap: () => ({ message: 'Grade must be ט\', י\', י"א, י"ב, י"ג, or י"ד' }),
-  }),
+  currentGrade: z.enum(['ט\'', 'י\'', 'י"א', 'י"ב', 'י"ג', 'י"ד']).nullable().optional(),
 });
 
 const updateCohortSchema = z.object({
@@ -43,6 +42,7 @@ export class CohortsController {
     try {
       const filters = {
         isActive: req.query.isActive === 'true' ? true : req.query.isActive === 'false' ? false : undefined,
+        skipAutoCreate: req.query.skipAutoCreate === 'true',
       };
 
       const cohorts = await cohortsService.getAll(filters);
@@ -82,14 +82,42 @@ export class CohortsController {
   }
 
   /**
-   * Delete cohort (soft delete)
-   * DELETE /api/cohorts/:id
+   * Refresh all cohorts - update grades and create new cohorts
+   * POST /api/cohorts/refresh
+   * This manually triggers the update of all cohorts (happens automatically on GET /api/cohorts)
+   * Useful for manual refresh or scheduled tasks
    */
-  async delete(req: Request, res: Response, next: NextFunction) {
+  async refresh(req: Request, res: Response, next: NextFunction) {
     try {
-      const id = Number(req.params.id);
-      const result = await cohortsService.delete(id);
-      res.json(result);
+      const apiKey = (req as any).apiKey;
+      const user = (req as any).user;
+      
+      // Log the refresh operation
+      await auditFromRequest(req, 'UPDATE', 'COHORT', {
+        status: 'SUCCESS',
+        priority: 'LOW',
+        details: {
+          action: 'REFRESH_ALL_COHORTS',
+          apiKeyId: apiKey?.id,
+          apiKeyName: apiKey?.name,
+          userId: user?.userId,
+        },
+      }).catch((err) => {
+        console.error('Failed to log REFRESH_ALL_COHORTS:', err);
+      });
+
+      // This will update all cohorts and create missing ones
+      await cohortsService.ensureAllCohortsExist();
+      
+      // Get updated count
+      const allCohorts = await cohortsService.getAll({ skipAutoCreate: true });
+      
+      res.json({
+        message: 'כל המחזורים עודכנו בהצלחה',
+        total: allCohorts.length,
+        active: allCohorts.filter((c: any) => c.isActive).length,
+        inactive: allCohorts.filter((c: any) => !c.isActive).length,
+      });
     } catch (error) {
       next(error);
     }

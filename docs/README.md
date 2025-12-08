@@ -34,6 +34,10 @@
 - **PRODUCTION_IMPROVEMENTS.md** - שיפורים לפרודקשן
 - **SOC_IMPROVEMENTS.md** - שיפורי SOC (Security Operations Center)
 
+### 🖥️ [Deployment](./deployment/)
+תיעוד פריסה:
+- **PHYSICAL_SERVER_DEPLOYMENT.md** - מדריך פריסה על שרת פיזי
+
 ## 📚 תיעוד ראשי
 
 - **[README.md](../README.md)** - תיעוד ראשי של הפרויקט
@@ -53,3 +57,6 @@
 
 ### רוצה לדעת מה שופר?
 → עיין ב-[Improvements](./improvements/)
+
+### צריך לפרוס את המערכת?
+→ עיין ב-[Deployment](./deployment/)

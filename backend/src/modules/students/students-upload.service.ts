@@ -90,22 +90,22 @@ export class StudentsUploadService {
 
   /**
    * Parse Excel file and return array of student data
-   * Supports multiple sheets (שכבה X) and starts from row 3
+   * Reads from first row (header row) - expects column names in Hebrew
    */
   async parseExcelFile(buffer: Buffer): Promise<ExcelStudentRow[]> {
     try {
       const workbook = XLSX.read(buffer, { type: 'buffer' });
       const allStudents: ExcelStudentRow[] = [];
 
-      // Process all sheets (each sheet is a "שכבה")
+      // Process all sheets
       for (const sheetName of workbook.SheetNames) {
         const worksheet = workbook.Sheets[sheetName];
         
-        // Convert to JSON, starting from row 3 (skip header rows)
-        // XLSX uses 0-based indexing, so row 3 is index 2
+        // Convert to JSON, starting from first row (header row)
+        // XLSX will use the first row as column names
         const data = XLSX.utils.sheet_to_json<ExcelStudentRow>(worksheet, {
-          range: 2, // Start from row 3 (0-indexed: 2)
           defval: null, // Use null for empty cells
+          raw: false, // Convert numbers to strings for consistency
         });
 
         allStudents.push(...data);
@@ -142,9 +142,9 @@ export class StudentsUploadService {
 
     const year = startYear || new Date().getFullYear();
     
-    // Validate startYear range: 1954 to current year + 1
+    // Validate startYear range: 1973 (first cohort) to current year + 1
     const currentYear = new Date().getFullYear();
-    const minYear = 1954;
+    const minYear = 1973;
     const maxYear = currentYear + 1;
     
     if (year < minYear || year > maxYear) {
@@ -153,7 +153,9 @@ export class StudentsUploadService {
       );
     }
     
-    const name = cohortName || `מחזור ${year}`;
+    // Import the function to generate cohort name
+    const { generateCohortName } = await import('../cohorts/cohorts.service');
+    const name = cohortName || generateCohortName(year);
 
     // Try to find existing cohort
     let cohort = null;
@@ -209,7 +211,7 @@ export class StudentsUploadService {
       for (let i = 0; i < batch.length; i++) {
         const globalIndex = batchStart + i;
         const row = batch[i];
-        const rowNumber = globalIndex + 3; // +3 because Excel starts at row 1, we skip rows 1-2, so data starts at row 3
+        const rowNumber = globalIndex + 2; // +2 because Excel starts at row 1, row 1 is header, so data starts at row 2
 
         try {
         // Get ID number (support both column names)

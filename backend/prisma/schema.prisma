@@ -133,7 +133,7 @@ model Cohort {
   id           Int       @id @default(autoincrement())
   name         String    @unique // Cohort name (e.g., "Cohort 2024")
   startYear    Int // Start year
-  currentGrade String // Current grade (10th, 11th, 12th, 13th, 14th)
+  currentGrade String? // Current grade (ט', י', י"א, י"ב, י"ג, י"ד) - null for next cohort (in selection)
   isActive     Boolean   @default(true)
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
@@ -250,6 +250,18 @@ model StudentExit {
   @@index([studentId])
   @@index([hasLeft])
   @@index([exitDate])
+}
+
+model Track {
+  id          Int       @id @default(autoincrement())
+  name        String    @unique // Track name
+  description String? // Optional description
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([isActive])
+  @@index([name])
 }
 
 model Permission {

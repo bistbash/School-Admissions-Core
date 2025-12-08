@@ -50,6 +50,8 @@ export interface AuditLogData {
   userAgent?: string;
   status: AuditStatus;
   errorMessage?: string;
+  priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  incidentStatus?: 'NEW' | 'INVESTIGATING' | 'RESOLVED' | 'FALSE_POSITIVE' | 'ESCALATED';
 }
 
 /**
@@ -76,12 +78,23 @@ function getUserAgent(req: Request): string | undefined {
  */
 function getUserInfo(req: Request): { userId?: number; userEmail?: string } {
   const user = (req as any).user as JwtPayload | undefined;
+  const apiKey = (req as any).apiKey;
+  
   if (user) {
     return {
       userId: user.userId,
       userEmail: user.email,
     };
   }
+  
+  // If API key is used, try to get user info from API key
+  if (apiKey?.userId) {
+    return {
+      userId: apiKey.userId,
+      userEmail: undefined, // API key doesn't have email
+    };
+  }
+  
   return {};
 }
 
@@ -107,6 +120,8 @@ export async function createAuditLog(data: AuditLogData): Promise<void> {
           userAgent: data.userAgent,
           status: data.status,
           errorMessage: data.errorMessage,
+          priority: data.priority,
+          incidentStatus: data.incidentStatus,
         },
       });
     }, 3, 200); // 3 retries with exponential backoff starting at 200ms
@@ -131,6 +146,8 @@ export async function auditFromRequest(
     details?: Record<string, any>;
     status?: AuditStatus;
     errorMessage?: string;
+    priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+    incidentStatus?: 'NEW' | 'INVESTIGATING' | 'RESOLVED' | 'FALSE_POSITIVE' | 'ESCALATED';
   } = {}
 ): Promise<void> {
   const userInfo = getUserInfo(req);
@@ -147,6 +164,8 @@ export async function auditFromRequest(
     userAgent,
     status: options.status || 'SUCCESS',
     errorMessage: options.errorMessage,
+    priority: options.priority,
+    incidentStatus: options.incidentStatus,
   });
 }
 
@@ -177,6 +196,9 @@ export function auditMiddleware(req: Request, res: Response, next: NextFunction)
     else if (path.includes('/auth')) resource = 'AUTH';
     else if (path.includes('/audit') || path.includes('/soc')) resource = 'AUDIT_LOG';
     else if (path.includes('/api-keys')) resource = 'AUDIT_LOG';
+    else if (path.includes('/cohorts')) resource = 'COHORT';
+    else if (path.includes('/students')) resource = 'STUDENT';
+    else if (path.includes('/student-exits')) resource = 'STUDENT_EXIT';
     
     // Determine action from method
     if (method === 'POST') {

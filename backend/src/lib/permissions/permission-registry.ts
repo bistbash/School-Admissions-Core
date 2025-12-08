@@ -91,7 +91,6 @@ export const PAGE_PERMISSIONS: Record<string, PagePermission> = {
     editAPIs: [
       { resource: 'cohorts', action: 'create', method: 'POST', path: '/api/cohorts', description: 'Create new cohort', descriptionHebrew: 'יצירת מחזור חדש' },
       { resource: 'cohorts', action: 'update', method: 'PUT', path: '/api/cohorts/:id', description: 'Update cohort', descriptionHebrew: 'עדכון מחזור' },
-      { resource: 'cohorts', action: 'delete', method: 'DELETE', path: '/api/cohorts/:id', description: 'Delete cohort', descriptionHebrew: 'מחיקת מחזור' },
     ],
     adminOnly: true,
   },

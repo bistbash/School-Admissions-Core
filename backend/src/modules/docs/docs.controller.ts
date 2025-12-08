@@ -246,12 +246,6 @@ export class DocsController {
             description: 'Update cohort',
             authentication: 'required',
           },
-          {
-            method: 'DELETE',
-            path: '/api/cohorts/:id',
-            description: 'Delete cohort',
-            authentication: 'required',
-          },
         ],
         'student-exits': [
           {

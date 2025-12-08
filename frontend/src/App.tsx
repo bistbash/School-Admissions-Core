@@ -11,6 +11,7 @@ import { ResourcesPage } from './features/resources/ResourcesPage';
 import { PermissionsPage } from './features/permissions/PermissionsPage';
 import { SOCPage } from './features/soc/SOCPage';
 import { APIPage } from './features/api/APIPage';
+import { StudentsPage } from './features/students/StudentsPage';
 import { Error403Page } from './features/errors/Error403Page';
 import { Error404Page } from './features/errors/Error404Page';
 import { Error500Page } from './features/errors/Error500Page';
@@ -182,7 +183,7 @@ function AppRoutes() {
           element={
             <PermissionGuard page="students" pageAction="view" fallback={<Error403Page />}>
               <ErrorHandler>
-                <div>Students Page - Coming Soon</div>
+                <StudentsPage />
               </ErrorHandler>
             </PermissionGuard>
           } 
