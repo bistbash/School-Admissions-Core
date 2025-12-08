@@ -114,14 +114,37 @@ School-Admissions-Core/
 │   │   └── server.ts      # Express server setup
 │   └── prisma/
 │       └── schema.prisma  # Database schema
-└── frontend/
-    ├── src/
-    │   ├── components/    # React components
-    │   ├── lib/           # API client and utilities
-    │   ├── types/         # TypeScript type definitions
-    │   └── App.tsx        # Main app component
-    └── ...
+├── frontend/
+│   ├── src/
+│   │   ├── components/    # React components
+│   │   ├── lib/           # API client and utilities
+│   │   ├── types/         # TypeScript type definitions
+│   │   └── App.tsx        # Main app component
+│   └── ...
+└── docs/                  # Comprehensive documentation
+    ├── security/          # Security documentation
+    ├── features/          # Feature documentation
+    ├── guides/            # How-to guides
+    └── improvements/      # Improvement documentation
 ```
+
+## Documentation
+
+תיעוד מקיף של המערכת נמצא בתיקיית [`docs/`](./docs/):
+
+- **[📚 Documentation Overview](./docs/README.md)** - סקירה כללית של כל התיעוד
+- **[🔒 Security](./docs/security/)** - תיעוד אבטחה מקיף
+- **[⚙️ Features](./docs/features/)** - תיעוד תכונות המערכת
+- **[📖 Guides](./docs/guides/)** - מדריכים והנחיות
+- **[🚀 Improvements](./docs/improvements/)** - תיעוד שיפורים שבוצעו
+
+### Quick Links
+
+- [Admin System](./docs/features/ADMIN_SYSTEM.md) - מערכת ניהול מנהלים
+- [Permissions System](./docs/features/PERMISSIONS_SYSTEM.md) - מערכת הרשאות
+- [Security Assessment](./docs/security/SECURITY_ASSESSMENT.md) - הערכת אבטחה
+- [How to Check Admin](./docs/guides/HOW_TO_CHECK_ADMIN.md) - איך לבדוק אם משתמש הוא admin
+- [Large File Uploads](./docs/guides/LARGE_FILE_UPLOADS.md) - העלאת קבצים גדולים
 
 ## API Endpoints
 
