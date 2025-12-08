@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { RolesService } from './roles.service';
-import { auditFromRequest } from '../../lib/audit';
+import { auditFromRequest } from '../../lib/audit/audit';
 
 const rolesService = new RolesService();
 

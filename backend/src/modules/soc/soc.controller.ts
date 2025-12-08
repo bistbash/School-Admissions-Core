@@ -1,10 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
 import { SOCService, AuditLogFilter, IncidentUpdate } from './soc.service';
-import { ForbiddenError, NotFoundError } from '../../lib/errors';
-import { auditFromRequest } from '../../lib/audit';
-import { logger, getCorrelationId } from '../../lib/logger';
-import { logSOCAction, trackIncidentResolution } from '../../lib/soc-metrics';
-import { exportAuditLogsToCSV, exportAuditLogsToJSON, exportStatsToJSON } from '../../lib/soc-export';
+import { ForbiddenError, NotFoundError } from '../../lib/utils/errors';
+import { auditFromRequest } from '../../lib/audit/audit';
+import { logger, getCorrelationId } from '../../lib/utils/logger';
+import { logSOCAction, trackIncidentResolution } from '../../lib/soc/soc-metrics';
+import { exportAuditLogsToCSV, exportAuditLogsToJSON, exportStatsToJSON } from '../../lib/soc/soc-export';
 
 const socService = new SOCService();
 

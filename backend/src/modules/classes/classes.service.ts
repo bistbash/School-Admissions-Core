@@ -1,6 +1,6 @@
-import { prisma } from '../../lib/prisma';
+import { prisma } from '../../lib/database/prisma';
 import { Class } from '@prisma/client';
-import { NotFoundError, ConflictError } from '../../lib/errors';
+import { NotFoundError, ConflictError } from '../../lib/utils/errors';
 
 export class ClassesService {
   async getAll(academicYear?: number) {

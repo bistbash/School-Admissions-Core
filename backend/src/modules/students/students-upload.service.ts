@@ -1,6 +1,6 @@
 import * as XLSX from 'xlsx';
-import { prisma } from '../../lib/prisma';
-import { ValidationError } from '../../lib/errors';
+import { prisma } from '../../lib/database/prisma';
+import { ValidationError } from '../../lib/utils/errors';
 import { StudentsService } from './students.service';
 
 export interface ExcelStudentRow {

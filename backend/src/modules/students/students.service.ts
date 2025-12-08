@@ -1,5 +1,5 @@
-import { prisma } from '../../lib/prisma';
-import { NotFoundError, ValidationError } from '../../lib/errors';
+import { prisma } from '../../lib/database/prisma';
+import { NotFoundError, ValidationError } from '../../lib/utils/errors';
 
 export interface CreateStudentData {
   idNumber: string;

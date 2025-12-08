@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import { requestContext } from '../logger';
+import { requestContext } from '../utils/logger';
 
 /**
  * Middleware to generate and attach correlation/request ID to each request

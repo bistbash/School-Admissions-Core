@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { StudentsService, CreateStudentData, UpdateStudentData } from './students.service';
-import { auditFromRequest } from '../../lib/audit';
+import { auditFromRequest } from '../../lib/audit/audit';
 import { z } from 'zod';
 
 const studentsService = new StudentsService();

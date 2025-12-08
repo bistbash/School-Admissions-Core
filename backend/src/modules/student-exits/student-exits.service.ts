@@ -1,5 +1,5 @@
-import { prisma } from '../../lib/prisma';
-import { NotFoundError } from '../../lib/errors';
+import { prisma } from '../../lib/database/prisma';
+import { NotFoundError } from '../../lib/utils/errors';
 
 export interface CreateExitData {
   studentId: number;

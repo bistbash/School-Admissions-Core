@@ -1,8 +1,8 @@
 import { Router } from 'express';
 import { PermissionsController } from './permissions.controller';
-import { authenticate } from '../../lib/auth';
-import { requireAdmin } from '../../lib/security';
-import { validateRequest } from '../../lib/validation';
+import { authenticate } from '../../lib/auth/auth';
+import { requireAdmin } from '../../lib/security/security';
+import { validateRequest } from '../../lib/utils/validation';
 import { z } from 'zod';
 
 const router = Router();

@@ -1,5 +1,5 @@
-import { prisma } from '../../lib/prisma';
-import { NotFoundError, ValidationError, ConflictError } from '../../lib/errors';
+import { prisma } from '../../lib/database/prisma';
+import { NotFoundError, ValidationError, ConflictError } from '../../lib/utils/errors';
 
 export interface CreatePermissionData {
   name: string;
@@ -133,114 +133,25 @@ export class PermissionsService {
   }
 
   /**
-   * Check if user has a specific permission (including role permissions)
+   * @deprecated Use hasScopedPermission from lib/permissions instead
+   * This method is kept for backward compatibility but will be removed
+   * Use: import { hasScopedPermission } from '../../lib/permissions/permissions';
+   * hasScopedPermission(userId, permissionName)
    */
   async hasPermission(userId: number, permissionName: string): Promise<boolean> {
-    // Admins have all permissions
-    const user = await prisma.soldier.findUnique({
-      where: { id: userId },
-      select: { isAdmin: true, roleId: true },
-    });
-
-    if (user?.isAdmin) {
-      return true;
-    }
-
-    // Check if permission exists
-    const permission = await prisma.permission.findUnique({
-      where: { name: permissionName },
-    });
-
-    if (!permission) {
-      return false;
-    }
-
-    // Check direct user permission
-    const userPermission = await prisma.userPermission.findFirst({
-      where: {
-        userId,
-        permissionId: permission.id,
-        isActive: true,
-      },
-    });
-
-    if (userPermission) {
-      return true;
-    }
-
-    // Check role permission if user has a role
-    if (user?.roleId) {
-      const rolePermission = await prisma.rolePermission.findFirst({
-        where: {
-          roleId: user.roleId,
-          permissionId: permission.id,
-          isActive: true,
-        },
-      });
-
-      if (rolePermission) {
-        return true;
-      }
-    }
-
-    return false;
+    const { hasScopedPermission } = await import('../../lib/permissions');
+    return hasScopedPermission(userId, permissionName);
   }
 
   /**
-   * Check if user has permission for a resource and action (including role permissions)
+   * @deprecated Use hasScopedPermission from lib/permissions instead
+   * This method is kept for backward compatibility but will be removed
+   * Use: import { hasScopedPermission } from '../../lib/permissions/permissions';
+   * hasScopedPermission(userId, `${resource}:${action}`)
    */
   async hasResourcePermission(userId: number, resource: string, action: string): Promise<boolean> {
-    // Admins have all permissions
-    const user = await prisma.soldier.findUnique({
-      where: { id: userId },
-      select: { isAdmin: true, roleId: true },
-    });
-
-    if (user?.isAdmin) {
-      return true;
-    }
-
-    // Check if permission exists
-    const permission = await prisma.permission.findFirst({
-      where: {
-        resource,
-        action,
-      },
-    });
-
-    if (!permission) {
-      return false;
-    }
-
-    // Check direct user permission
-    const userPermission = await prisma.userPermission.findFirst({
-      where: {
-        userId,
-        permissionId: permission.id,
-        isActive: true,
-      },
-    });
-
-    if (userPermission) {
-      return true;
-    }
-
-    // Check role permission if user has a role
-    if (user?.roleId) {
-      const rolePermission = await prisma.rolePermission.findFirst({
-        where: {
-          roleId: user.roleId,
-          permissionId: permission.id,
-          isActive: true,
-        },
-      });
-
-      if (rolePermission) {
-        return true;
-      }
-    }
-
-    return false;
+    const { hasScopedPermission } = await import('../../lib/permissions');
+    return hasScopedPermission(userId, `${resource}:${action}`);
   }
 
   /**

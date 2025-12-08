@@ -1,9 +1,9 @@
 import { Router } from 'express';
 import { StudentsController } from './students.controller';
 import { StudentsUploadController } from './students-upload.controller';
-import { authenticate } from '../../lib/auth';
-import { requireAPIKey, strictRateLimiter, fileUploadRateLimiter, requireAdmin } from '../../lib/security';
-import { validateRequest } from '../../lib/validation';
+import { authenticate } from '../../lib/auth/auth';
+import { requireAPIKey, strictRateLimiter, fileUploadRateLimiter, requireAdmin } from '../../lib/security/security';
+import { validateRequest } from '../../lib/utils/validation';
 import { z } from 'zod';
 
 const router = Router();

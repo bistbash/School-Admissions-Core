@@ -16,18 +16,18 @@ import classesRoutes from './modules/classes/classes.routes';
 import docsRoutes from './modules/docs/docs.routes';
 import permissionsRoutes from './modules/permissions/permissions.routes';
 import searchRoutes from './modules/search/search.routes';
-import { errorHandler } from './lib/errors';
-import { auditMiddleware } from './lib/audit';
-import { ipBlockingMiddleware } from './lib/ipBlocking';
-import { apiRateLimiter } from './lib/security';
-import { csrfProtection } from './lib/csrf';
+import { errorHandler } from './lib/utils/errors';
+import { auditMiddleware } from './lib/audit/audit';
+import { ipBlockingMiddleware } from './lib/security/ipBlocking';
+import { apiRateLimiter } from './lib/security/security';
+import { csrfProtection } from './lib/security/csrf';
 import { requestIdMiddleware } from './lib/middleware/request-id';
 import { requestLoggerMiddleware } from './lib/middleware/request-logger';
-import { healthCheck, livenessCheck, readinessCheck } from './lib/health';
-import { getMetrics, startMetricsLogging } from './lib/metrics';
-import { logger } from './lib/logger';
-import { prisma } from './lib/prisma';
-import { validateEnv } from './lib/env';
+import { healthCheck, livenessCheck, readinessCheck } from './lib/utils/health';
+import { getMetrics, startMetricsLogging } from './lib/utils/metrics';
+import { logger } from './lib/utils/logger';
+import { prisma } from './lib/database/prisma';
+import { validateEnv } from './lib/utils/env';
 
 dotenv.config();
 

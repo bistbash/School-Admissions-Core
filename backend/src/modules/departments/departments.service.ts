@@ -1,6 +1,6 @@
-import { prisma } from '../../lib/prisma';
+import { prisma } from '../../lib/database/prisma';
 import { Department } from '@prisma/client';
-import { NotFoundError } from '../../lib/errors';
+import { NotFoundError } from '../../lib/utils/errors';
 
 export class DepartmentsService {
     async getAll() {

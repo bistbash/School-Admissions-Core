@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { SearchController } from './search.controller';
-import { authenticate } from '../../lib/auth';
+import { authenticate } from '../../lib/auth/auth';
 
 const router = Router();
 const searchController = new SearchController();

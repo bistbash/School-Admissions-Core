@@ -1,8 +1,8 @@
 import { Router } from 'express';
 import { ClassesController } from './classes.controller';
-import { validateRequest } from '../../lib/validation';
+import { validateRequest } from '../../lib/utils/validation';
 import { z } from 'zod';
-import { authenticate } from '../../lib/auth';
+import { authenticate } from '../../lib/auth/auth';
 
 const router = Router();
 const classesController = new ClassesController();

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { RoomsController } from './rooms.controller';
-import { validateRequest, roomSchema } from '../../lib/validation';
-import { authenticate } from '../../lib/auth';
+import { validateRequest, roomSchema } from '../../lib/utils/validation';
+import { authenticate } from '../../lib/auth/auth';
 
 const router = Router();
 const roomsController = new RoomsController();

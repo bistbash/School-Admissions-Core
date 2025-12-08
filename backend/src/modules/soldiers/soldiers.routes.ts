@@ -1,8 +1,8 @@
 import { Router } from 'express';
 import { SoldiersController } from './soldiers.controller';
-import { validateRequest, soldierSchema } from '../../lib/validation';
-import { authenticate } from '../../lib/auth';
-import { requireAdmin } from '../../lib/security';
+import { validateRequest, soldierSchema } from '../../lib/utils/validation';
+import { authenticate } from '../../lib/auth/auth';
+import { requireAdmin } from '../../lib/security/security';
 
 const router = Router();
 const soldiersController = new SoldiersController();

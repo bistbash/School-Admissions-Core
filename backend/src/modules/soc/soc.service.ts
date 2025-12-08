@@ -1,6 +1,6 @@
-import { prisma } from '../../lib/prisma';
-import { AuditAction, AuditResource, AuditStatus } from '../../lib/audit';
-import { socCache, getAuditLogsCacheKey, getStatsCacheKey, invalidateSOCCache } from '../../lib/soc-cache';
+import { prisma } from '../../lib/database/prisma';
+import { AuditAction, AuditResource, AuditStatus } from '../../lib/audit/audit';
+import { socCache, getAuditLogsCacheKey, getStatsCacheKey, invalidateSOCCache } from '../../lib/soc/soc-cache';
 
 export interface AuditLogFilter {
   userId?: number;

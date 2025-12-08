@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
-import { logger, getCorrelationId } from '../logger';
-import { recordRequest } from '../metrics';
+import { logger, getCorrelationId } from '../utils/logger';
+import { recordRequest } from '../utils/metrics';
 
 /**
  * Request/Response logging middleware

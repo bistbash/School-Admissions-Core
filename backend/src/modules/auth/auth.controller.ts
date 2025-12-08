@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { AuthService } from './auth.service';
-import { auditFromRequest } from '../../lib/audit';
+import { auditFromRequest } from '../../lib/audit/audit';
 
 const authService = new AuthService();
 

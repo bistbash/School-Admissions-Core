@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { StudentsUploadService } from './students-upload.service';
-import { auditFromRequest } from '../../lib/audit';
-import { isRequestFromTrustedUser } from '../../lib/trustedUsers';
+import { auditFromRequest } from '../../lib/audit/audit';
+import { isRequestFromTrustedUser } from '../../lib/security/trustedUsers';
 import multer from 'multer';
 
 const studentsUploadService = new StudentsUploadService();

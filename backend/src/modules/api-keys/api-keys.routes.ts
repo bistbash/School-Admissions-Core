@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { APIKeysController } from './api-keys.controller';
-import { authenticate } from '../../lib/auth';
-import { validateRequest } from '../../lib/validation';
+import { authenticate } from '../../lib/auth/auth';
+import { validateRequest } from '../../lib/utils/validation';
 import { z } from 'zod';
 
 const router = Router();

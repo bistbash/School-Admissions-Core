@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { DepartmentsController } from './departments.controller';
-import { validateRequest, departmentSchema } from '../../lib/validation';
-import { authenticate } from '../../lib/auth';
+import { validateRequest, departmentSchema } from '../../lib/utils/validation';
+import { authenticate } from '../../lib/auth/auth';
 
 const router = Router();
 const departmentsController = new DepartmentsController();

@@ -1,6 +1,6 @@
-import { prisma } from '../../lib/prisma';
-import { hashPassword, comparePassword, generateToken, JwtPayload } from '../../lib/auth';
-import { NotFoundError, ValidationError, ConflictError, UnauthorizedError } from '../../lib/errors';
+import { prisma } from '../../lib/database/prisma';
+import { hashPassword, comparePassword, generateToken, JwtPayload } from '../../lib/auth/auth';
+import { NotFoundError, ValidationError, ConflictError, UnauthorizedError } from '../../lib/utils/errors';
 
 export interface CreateUserData {
   email: string;
@@ -381,6 +381,11 @@ export class AuthService {
    * Approve a user (admin only)
    */
   async approveUser(userId: number, approvedBy: number) {
+    // Prevent modifying the first created user
+    if (await this.isFirstCreatedUser(userId)) {
+      throw new ValidationError('Cannot modify the first created user (system administrator)');
+    }
+
     const soldier = await prisma.soldier.findUnique({
       where: { id: userId },
     });
@@ -425,6 +430,11 @@ export class AuthService {
    * When rejecting, reset needsProfileCompletion so user can re-enter data
    */
   async rejectUser(userId: number, rejectedBy: number) {
+    // Prevent modifying the first created user
+    if (await this.isFirstCreatedUser(userId)) {
+      throw new ValidationError('Cannot modify the first created user (system administrator)');
+    }
+
     const soldier = await prisma.soldier.findUnique({
       where: { id: userId },
     });
@@ -470,6 +480,11 @@ export class AuthService {
    * Sets a new temporary password for the user
    */
   async resetUserPassword(userId: number, newPassword: string, resetBy: number) {
+    // Prevent modifying the first created user
+    if (await this.isFirstCreatedUser(userId)) {
+      throw new ValidationError('Cannot modify the first created user (system administrator)');
+    }
+
     const soldier = await prisma.soldier.findUnique({
       where: { id: userId },
     });
@@ -512,6 +527,11 @@ export class AuthService {
     isAdmin?: boolean;
     approvalStatus?: 'CREATED' | 'PENDING' | 'APPROVED' | 'REJECTED';
   }, updatedBy: number) {
+    // Prevent modifying the first created user
+    if (await this.isFirstCreatedUser(userId)) {
+      throw new ValidationError('Cannot modify the first created user (system administrator)');
+    }
+
     const soldier = await prisma.soldier.findUnique({
       where: { id: userId },
     });
@@ -599,6 +619,30 @@ export class AuthService {
   }
 
   /**
+   * Get the first created user ID (the original admin)
+   * This user is protected from modification/deletion
+   */
+  private async getFirstCreatedUserId(): Promise<number | null> {
+    const firstUser = await prisma.soldier.findFirst({
+      orderBy: {
+        createdAt: 'asc',
+      },
+      select: {
+        id: true,
+      },
+    });
+    return firstUser?.id || null;
+  }
+
+  /**
+   * Check if a user is the first created user (protected)
+   */
+  private async isFirstCreatedUser(userId: number): Promise<boolean> {
+    const firstUserId = await this.getFirstCreatedUserId();
+    return firstUserId === userId;
+  }
+
+  /**
    * Delete a user (admin only)
    * Admin can delete users at any time, regardless of their status
    */
@@ -614,6 +658,11 @@ export class AuthService {
 
     if (!soldier) {
       throw new NotFoundError('User');
+    }
+
+    // Prevent deleting the first created user
+    if (await this.isFirstCreatedUser(userId)) {
+      throw new ValidationError('Cannot delete the first created user (system administrator)');
     }
 
     // Prevent admin from deleting themselves

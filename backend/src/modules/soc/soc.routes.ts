@@ -1,8 +1,8 @@
 import { Router } from 'express';
 import { SOCController } from './soc.controller';
-import { authenticate } from '../../lib/auth';
-import { requireAdmin } from '../../lib/security';
-import { ForbiddenError } from '../../lib/errors';
+import { authenticate } from '../../lib/auth/auth';
+import { requireAdmin } from '../../lib/security/security';
+import { ForbiddenError } from '../../lib/utils/errors';
 
 const router = Router();
 const socController = new SOCController();

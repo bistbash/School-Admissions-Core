@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { PermissionsService } from './permissions.service';
-import { auditFromRequest } from '../../lib/audit';
+import { auditFromRequest } from '../../lib/audit/audit';
 
 const permissionsService = new PermissionsService();
 

@@ -1,9 +1,9 @@
 import { Router } from 'express';
 import { AuthController } from './auth.controller';
-import { validateRequest, strongPasswordSchema } from '../../lib/validation';
+import { validateRequest, strongPasswordSchema } from '../../lib/utils/validation';
 import { z } from 'zod';
-import { authenticate } from '../../lib/auth';
-import { requireAdmin, loginRateLimiter } from '../../lib/security';
+import { authenticate } from '../../lib/auth/auth';
+import { requireAdmin, loginRateLimiter } from '../../lib/security/security';
 
 const router = Router();
 const authController = new AuthController();

@@ -1,6 +1,6 @@
-import { prisma } from '../../lib/prisma';
-import { createAPIKey, revokeAPIKey, getUserAPIKeys } from '../../lib/apiKeys';
-import { NotFoundError } from '../../lib/errors';
+import { prisma } from '../../lib/database/prisma';
+import { createAPIKey, revokeAPIKey, getUserAPIKeys } from '../../lib/api-keys/apiKeys';
+import { NotFoundError } from '../../lib/utils/errors';
 
 export interface CreateAPIKeyData {
   name: string;

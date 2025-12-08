@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { SoldiersService } from './soldiers.service';
-import { auditFromRequest } from '../../lib/audit';
+import { auditFromRequest } from '../../lib/audit/audit';
 
 const soldiersService = new SoldiersService();
 

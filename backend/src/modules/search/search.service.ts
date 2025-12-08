@@ -1,7 +1,5 @@
-import { PermissionsService } from '../permissions/permissions.service';
-import { prisma } from '../../lib/prisma';
-
-const permissionsService = new PermissionsService();
+import { hasScopedPermission } from '../../lib/permissions/permissions';
+import { prisma } from '../../lib/database/prisma';
 
 /**
  * Define all available pages/routes in the system
@@ -97,29 +95,17 @@ export class SearchService {
    * Search for pages that the user has access to
    */
   async searchPages(userId: number, query: string): Promise<PageDefinition[]> {
-    // Get user permissions
-    const userPermissions = await permissionsService.getUserPermissions(userId);
-    const permissionSet = new Set(userPermissions.map(p => `${p.resource}.${p.action}`));
-
-    // Check if user is admin (admins have access to all pages)
-    const user = await prisma.soldier.findUnique({
-      where: { id: userId },
-      select: { isAdmin: true },
-    });
-
-    const isAdmin = user?.isAdmin || false;
-
-    // Filter pages based on permissions
-    const accessiblePages = AVAILABLE_PAGES.filter(page => {
-      // Admins have access to all pages
-      if (isAdmin) {
-        return true;
+    // Filter pages based on permissions using new scoped permission system
+    const accessiblePages: PageDefinition[] = [];
+    
+    for (const page of AVAILABLE_PAGES) {
+      const permissionString = `${page.resource}:${page.action}`;
+      const hasAccess = await hasScopedPermission(userId, permissionString);
+      
+      if (hasAccess) {
+        accessiblePages.push(page);
       }
-
-      // Check if user has permission for this page
-      const permissionKey = `${page.resource}.${page.action}`;
-      return permissionSet.has(permissionKey);
-    });
+    }
 
     // Filter by search query if provided
     if (query && query.trim()) {
