@@ -11,6 +11,8 @@ import { StudentsTable } from './StudentsTable';
 import { TracksManagement } from './TracksManagement';
 import { CohortsManagement } from './CohortsManagement';
 import { Select } from '../../shared/ui/Select';
+import { PageWrapper } from '../../shared/components/PageWrapper';
+import { usePageMode } from '../permissions/PageModeContext';
 
 interface Student {
   id: number;
@@ -47,6 +49,7 @@ interface Cohort {
 }
 
 export function StudentsPage() {
+  const { mode } = usePageMode();
   const [students, setStudents] = useState<Student[]>([]);
   const [cohorts, setCohorts] = useState<Cohort[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -125,36 +128,39 @@ export function StudentsPage() {
   const hasActiveFilters = Object.values(filters).some((v) => v !== '') || searchQuery !== '';
 
   return (
-    <div className="space-y-6 animate-in max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-medium tracking-tight text-black dark:text-white flex items-center gap-2">
-            <GraduationCap className="h-6 w-6" />
-            ניהול תלמידים
-          </h1>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            ניהול מקצועי של תלמידי בית הספר
-          </p>
+    <PageWrapper>
+      <div className="space-y-6 animate-in max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div className="space-y-1">
+            <h1 className="text-2xl font-medium tracking-tight text-black dark:text-white flex items-center gap-2">
+              <GraduationCap className="h-6 w-6" />
+              ניהול תלמידים
+            </h1>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              ניהול מקצועי של תלמידי בית הספר
+            </p>
+          </div>
+          {mode === 'edit' && (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setIsUploadModalOpen(true)}
+                className="gap-2"
+              >
+                <Upload className="h-4 w-4" />
+                העלאת אקסל ממשו״ב
+              </Button>
+              <Button
+                onClick={() => setIsAddModalOpen(true)}
+                className="gap-2"
+              >
+                <Plus className="h-4 w-4" />
+                הוסף תלמיד
+              </Button>
+            </div>
+          )}
         </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            onClick={() => setIsUploadModalOpen(true)}
-            className="gap-2"
-          >
-            <Upload className="h-4 w-4" />
-            העלאת אקסל ממשו״ב
-          </Button>
-          <Button
-            onClick={() => setIsAddModalOpen(true)}
-            className="gap-2"
-          >
-            <Plus className="h-4 w-4" />
-            הוסף תלמיד
-          </Button>
-        </div>
-      </div>
 
       {/* Tabs */}
       <Tabs defaultValue="students" className="w-full">
@@ -299,6 +305,7 @@ export function StudentsPage() {
         onClose={() => setIsUploadModalOpen(false)}
         onSuccess={handleUploadComplete}
       />
-    </div>
+      </div>
+    </PageWrapper>
   );
 }

@@ -45,6 +45,36 @@ router.post('/users/:userId/revoke', requireAdmin, validateRequest(grantPermissi
 router.post('/users/:userId/grant-page', requireAdmin, validateRequest(grantPagePermissionSchema), permissionsController.grantPagePermission.bind(permissionsController));
 router.post('/users/:userId/revoke-page', requireAdmin, validateRequest(grantPagePermissionSchema), permissionsController.revokePagePermission.bind(permissionsController));
 router.post('/roles/:roleId/grant-page', requireAdmin, validateRequest(grantPagePermissionSchema), permissionsController.grantPagePermissionToRole.bind(permissionsController));
+router.post('/roles/:roleId/revoke-page', requireAdmin, validateRequest(grantPagePermissionSchema), permissionsController.revokePagePermissionFromRole.bind(permissionsController));
+router.get('/roles/:roleId/page-permissions', requireAdmin, permissionsController.getRolePagePermissions.bind(permissionsController));
+router.post('/users/:userId/bulk-grant-page', requireAdmin, validateRequest(z.object({
+  permissions: z.array(z.object({
+    page: z.string().min(1),
+    action: z.enum(['view', 'edit']),
+  })),
+})), permissionsController.bulkGrantPagePermissionsToUser.bind(permissionsController));
+router.post('/roles/:roleId/bulk-grant-page', requireAdmin, validateRequest(z.object({
+  permissions: z.array(z.object({
+    page: z.string().min(1),
+    action: z.enum(['view', 'edit']),
+  })),
+})), permissionsController.bulkGrantPagePermissionsToRole.bind(permissionsController));
+router.post('/users/:userId/grant-custom-mode', requireAdmin, validateRequest(z.object({
+  page: z.string().min(1),
+  modeId: z.string().min(1),
+})), permissionsController.grantCustomModePermission.bind(permissionsController));
+router.post('/users/:userId/revoke-custom-mode', requireAdmin, validateRequest(z.object({
+  page: z.string().min(1),
+  modeId: z.string().min(1),
+})), permissionsController.revokeCustomModePermission.bind(permissionsController));
+router.post('/roles/:roleId/grant-custom-mode', requireAdmin, validateRequest(z.object({
+  page: z.string().min(1),
+  modeId: z.string().min(1),
+})), permissionsController.grantCustomModePermissionToRole.bind(permissionsController));
+router.post('/roles/:roleId/revoke-custom-mode', requireAdmin, validateRequest(z.object({
+  page: z.string().min(1),
+  modeId: z.string().min(1),
+})), permissionsController.revokeCustomModePermissionFromRole.bind(permissionsController));
 router.get('/:permissionId/users', requireAdmin, permissionsController.getUsersWithPermission.bind(permissionsController));
 
 export default router;

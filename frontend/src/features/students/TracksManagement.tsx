@@ -5,6 +5,8 @@ import { Input } from '../../shared/ui/Input';
 import { Card, CardContent, CardHeader, CardTitle } from '../../shared/ui/Card';
 import { Modal } from '../../shared/ui/Modal';
 import { apiClient } from '../../shared/lib/api';
+import { usePermissions } from '../permissions/PermissionsContext';
+import { usePageMode } from '../permissions/PageModeContext';
 
 interface Track {
   id: number;
@@ -14,6 +16,9 @@ interface Track {
 }
 
 export function TracksManagement() {
+  const { hasPagePermission } = usePermissions();
+  const { mode } = usePageMode();
+  const canEdit = hasPagePermission('tracks', 'edit');
   const [tracks, setTracks] = useState<Track[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -57,10 +62,27 @@ export function TracksManagement() {
     }
 
     try {
-      await apiClient.delete(`/tracks/${id}`);
+      setIsLoading(true);
+      const response = await apiClient.delete(`/tracks/${id}`);
+      console.log('Delete response:', response);
+      // Reload tracks after successful deletion
       await loadTracks();
     } catch (error: any) {
-      alert(error.response?.data?.error || error.message || 'שגיאה במחיקת המגמה');
+      console.error('Delete error:', error);
+      // Extract error message from different possible locations
+      let errorMessage = 'שגיאה במחיקת המגמה';
+      
+      if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      alert(errorMessage);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -98,10 +120,12 @@ export function TracksManagement() {
           <h2 className="text-xl font-semibold text-black dark:text-white">ניהול מגמות</h2>
           <p className="text-sm text-gray-600 dark:text-gray-400">ניהול מגמות הלימוד במערכת</p>
         </div>
-        <Button onClick={handleAdd} className="gap-2">
-          <Plus className="h-4 w-4" />
-          הוסף מגמה
-        </Button>
+        {canEdit && mode === 'edit' && (
+          <Button onClick={handleAdd} className="gap-2">
+            <Plus className="h-4 w-4" />
+            הוסף מגמה
+          </Button>
+        )}
       </div>
 
       {isLoading ? (
@@ -135,24 +159,26 @@ export function TracksManagement() {
                           </p>
                         )}
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleEdit(track)}
-                          className="h-8 w-8"
-                        >
-                          <Edit2 className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleDelete(track.id)}
-                          className="h-8 w-8 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
+                      {canEdit && mode === 'edit' && (
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleEdit(track)}
+                            className="h-8 w-8"
+                          >
+                            <Edit2 className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDelete(track.id)}
+                            className="h-8 w-8 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -181,6 +207,18 @@ export function TracksManagement() {
                           </p>
                         )}
                       </div>
+                      {canEdit && mode === 'edit' && (
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDelete(track.id)}
+                            className="h-8 w-8 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

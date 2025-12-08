@@ -1,6 +1,6 @@
 import { prisma } from '../../lib/database/prisma';
 import { NotFoundError, ValidationError, ConflictError } from '../../lib/utils/errors';
-import { PAGE_PERMISSIONS, getAPIPermissionsForPage, isPageAdminOnly } from '../../lib/permissions/permission-registry';
+import { PAGE_PERMISSIONS, getAPIPermissionsForPage } from '../../lib/permissions/permission-registry';
 
 export interface CreatePermissionData {
   name: string;
@@ -226,7 +226,20 @@ export class PermissionsService {
           },
         });
       }
-      throw new ConflictError('Permission already granted to this user');
+      // Permission already exists and is active - return it (idempotent)
+      return prisma.userPermission.findUnique({
+        where: { id: existing.id },
+        include: {
+          permission: true,
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+        },
+      });
     }
 
     // Grant permission
@@ -252,6 +265,7 @@ export class PermissionsService {
 
   /**
    * Revoke permission from user (Admin only)
+   * Idempotent: if permission doesn't exist or is already inactive, returns success
    */
   async revokePermission(userId: number, permissionId: number) {
     const userPermission = await prisma.userPermission.findUnique({
@@ -263,8 +277,20 @@ export class PermissionsService {
       },
     });
 
-    if (!userPermission) {
-      throw new NotFoundError('User permission');
+    // If permission doesn't exist or is already inactive, return success (idempotent)
+    if (!userPermission || !userPermission.isActive) {
+      // Return a mock response for consistency
+      const permission = await prisma.permission.findUnique({
+        where: { id: permissionId },
+      });
+      return {
+        id: userPermission?.id || 0,
+        userId,
+        permissionId,
+        permission: permission || null,
+        isActive: false,
+        user: null,
+      };
     }
 
     // Deactivate instead of deleting (for audit trail)
@@ -471,11 +497,11 @@ export class PermissionsService {
       throw new NotFoundError(`Page "${page}" not found`);
     }
 
-    // Check if admin-only and user is not admin
-    if (action === 'edit' && isPageAdminOnly(page)) {
-      if (!user?.isAdmin) {
-        throw new ValidationError(`Only admins can edit page "${page}"`);
-      }
+    // Check if page supports edit mode when trying to grant edit permission
+    if (action === 'edit' && pagePermission.supportsEditMode === false) {
+      throw new ValidationError(
+        `Page "${pagePermission.displayNameHebrew || pagePermission.displayName}" does not support edit mode. Only view permission can be granted.`
+      );
     }
 
     // Get or create page permission
@@ -510,6 +536,8 @@ export class PermissionsService {
 
   /**
    * Revoke page permission from user (automatically revokes API permissions)
+   * Idempotent: if permission doesn't exist, returns success
+   * Note: Only revokes direct user permissions, not permissions from roles
    */
   async revokePagePermission(userId: number, page: string, action: 'view' | 'edit') {
     // Get page permission
@@ -518,8 +546,138 @@ export class PermissionsService {
       where: { name: pagePermissionName },
     });
 
+    // If permission type doesn't exist in system, nothing to revoke
     if (!pagePerm) {
-      throw new NotFoundError(`Page permission "${pagePermissionName}" not found`);
+      return {
+        pagePermission: null,
+        apiPermissions: 0,
+        message: 'Permission type not found in system',
+      };
+    }
+
+    // Get user to check role
+    const user = await prisma.soldier.findUnique({
+      where: { id: userId },
+      select: { roleId: true, id: true },
+    });
+
+    if (!user) {
+      throw new NotFoundError('User');
+    }
+
+    // Check if user has this permission directly (not through role)
+    const userPermission = await prisma.userPermission.findUnique({
+      where: {
+        userId_permissionId: {
+          userId,
+          permissionId: pagePerm.id,
+        },
+      },
+    });
+
+    // Check if user has this permission directly
+    if (userPermission && userPermission.isActive) {
+      // User has direct permission - can revoke it
+      // But first check: if trying to revoke 'view' but user also has 'edit', view is included in edit
+      if (action === 'view') {
+        const editPermissionName = `page:${page}:edit`;
+        const editPerm = await prisma.permission.findUnique({
+          where: { name: editPermissionName },
+        });
+        
+        if (editPerm) {
+          const userEditPermission = await prisma.userPermission.findUnique({
+            where: {
+              userId_permissionId: {
+                userId,
+                permissionId: editPerm.id,
+              },
+            },
+          });
+          
+          // If user has edit permission directly, view is included - cannot revoke view separately
+          if (userEditPermission && userEditPermission.isActive) {
+            throw new ValidationError(
+              `Cannot revoke "view" permission - user has "edit" permission which includes view. Revoke "edit" instead to remove both.`
+            );
+          }
+        }
+      }
+      
+      // User has direct permission and it's not blocked by edit - proceed with revocation
+      // (continue to actual revocation below)
+    } else {
+      // User doesn't have direct permission - check if it comes from role or edit
+      // Special case: if trying to revoke 'view' but user has 'edit', view is included in edit
+      if (action === 'view') {
+        const editPermissionName = `page:${page}:edit`;
+        const editPerm = await prisma.permission.findUnique({
+          where: { name: editPermissionName },
+        });
+        
+        if (editPerm) {
+          // Check if user has edit permission directly
+          const userEditPermission = await prisma.userPermission.findUnique({
+            where: {
+              userId_permissionId: {
+                userId,
+                permissionId: editPerm.id,
+              },
+            },
+          });
+          
+          // If user has edit permission directly, view is included - cannot revoke view separately
+          if (userEditPermission && userEditPermission.isActive) {
+            throw new ValidationError(
+              `Cannot revoke "view" permission - user has "edit" permission which includes view. Revoke "edit" instead to remove both.`
+            );
+          }
+          
+          // Check if user has edit permission through role
+          if (user.roleId) {
+            const roleEditPermission = await prisma.rolePermission.findUnique({
+              where: {
+                roleId_permissionId: {
+                  roleId: user.roleId,
+                  permissionId: editPerm.id,
+                },
+              },
+            });
+            
+            if (roleEditPermission && roleEditPermission.isActive) {
+              throw new ValidationError(
+                `Cannot revoke "view" permission - user has "edit" permission (through role) which includes view. Revoke "edit" from the role instead.`
+              );
+            }
+          }
+        }
+      }
+      
+      // Check if permission comes from role
+      if (user.roleId) {
+        const rolePermission = await prisma.rolePermission.findUnique({
+          where: {
+            roleId_permissionId: {
+              roleId: user.roleId,
+              permissionId: pagePerm.id,
+            },
+          },
+        });
+
+        if (rolePermission && rolePermission.isActive) {
+          // Permission comes from role - cannot revoke directly
+          throw new ValidationError(
+            `Cannot revoke permission "${pagePermissionName}" - it is granted through the user's role. Remove it from the role instead.`
+          );
+        }
+      }
+
+      // Permission doesn't exist (not from user, not from role, not from edit) - return success (idempotent)
+      return {
+        pagePermission: pagePerm,
+        apiPermissions: 0,
+        message: 'Permission was not granted directly to this user',
+      };
     }
 
     // Revoke page permission
@@ -528,19 +686,31 @@ export class PermissionsService {
     // Get all API permissions for this page and action
     const apiPermissions = getAPIPermissionsForPage(page, action);
 
-    // Revoke all API permissions
+    // Revoke all API permissions (only if they exist and are active)
+    let revokedCount = 0;
     for (const apiPerm of apiPermissions) {
       const permission = await prisma.permission.findUnique({
         where: { name: `${apiPerm.resource}:${apiPerm.action}` },
       });
       if (permission) {
-        await this.revokePermission(userId, permission.id);
+        const userApiPerm = await prisma.userPermission.findUnique({
+          where: {
+            userId_permissionId: {
+              userId,
+              permissionId: permission.id,
+            },
+          },
+        });
+        if (userApiPerm && userApiPerm.isActive) {
+          await this.revokePermission(userId, permission.id);
+          revokedCount++;
+        }
       }
     }
 
     return {
       pagePermission: pagePerm,
-      apiPermissions: apiPermissions.length,
+      apiPermissions: revokedCount,
     };
   }
 
@@ -552,7 +722,7 @@ export class PermissionsService {
   }
 
   /**
-   * Get user's page permissions
+   * Get user's page permissions (including custom view modes)
    */
   async getUserPagePermissions(userId: number) {
     // Check if user is admin - admins have all permissions
@@ -563,31 +733,71 @@ export class PermissionsService {
 
     if (user?.isAdmin) {
       // Admins have all permissions - return all pages with view and edit
-      const pagePermissions: Record<string, { view: boolean; edit: boolean }> = {};
+      // Maintain consistent object shape with non-admin users for frontend compatibility
+      const pagePermissions: Record<string, { 
+        view: boolean; 
+        edit: boolean; 
+        customModes?: string[];
+        viewFromRole?: boolean;
+        editFromRole?: boolean;
+      }> = {};
       Object.keys(PAGE_PERMISSIONS).forEach(page => {
-        pagePermissions[page] = { view: true, edit: true };
+        pagePermissions[page] = { 
+          view: true, 
+          edit: true, 
+          customModes: [], 
+          viewFromRole: false, 
+          editFromRole: false 
+        };
       });
       return pagePermissions;
     }
 
     const userPermissions = await this.getUserPermissionsWithDetails(userId);
     
-    const pagePermissions: Record<string, { view: boolean; edit: boolean }> = {};
+    const pagePermissions: Record<string, { 
+      view: boolean; 
+      edit: boolean; 
+      customModes?: string[];
+      viewFromRole?: boolean;
+      editFromRole?: boolean;
+    }> = {};
     
     // Initialize all pages
     Object.keys(PAGE_PERMISSIONS).forEach(page => {
-      pagePermissions[page] = { view: false, edit: false };
+      pagePermissions[page] = { view: false, edit: false, customModes: [], viewFromRole: false, editFromRole: false };
     });
 
-    // Check user permissions
+    // Check user permissions - track both direct view and edit permissions, and their source
     userPermissions.forEach((up: any) => {
       const perm = up.permission;
+      const source = up.source || 'user'; // 'user' for direct, 'role' for role-based
+      
       if (perm.resource === 'page') {
-        const match = perm.action.match(/^(.+):(view|edit)$/);
-        if (match) {
-          const [, page, action] = match;
+        // Check for standard view/edit permissions: page:pageName:view or page:pageName:edit
+        const standardMatch = perm.action.match(/^(.+):(view|edit)$/);
+        if (standardMatch) {
+          const [, page, action] = standardMatch;
           if (pagePermissions[page]) {
+            // Set the specific permission (view or edit)
             pagePermissions[page][action as 'view' | 'edit'] = true;
+            // Track if permission comes from role
+            if (source === 'role') {
+              pagePermissions[page][action === 'view' ? 'viewFromRole' : 'editFromRole'] = true;
+            }
+            // Note: edit includes view, but we track them separately
+            // If user has edit, view will be true in the UI, but we know it comes from edit
+          }
+        } else {
+          // Check for custom mode permissions: page:pageName:mode:modeId
+          const customMatch = perm.action.match(/^(.+):mode:(.+)$/);
+          if (customMatch) {
+            const [, page, modeId] = customMatch;
+            if (pagePermissions[page] && pagePermissions[page].customModes) {
+              if (!pagePermissions[page].customModes!.includes(modeId)) {
+                pagePermissions[page].customModes!.push(modeId);
+              }
+            }
           }
         }
       }
@@ -609,6 +819,13 @@ export class PermissionsService {
     const pagePermission = PAGE_PERMISSIONS[page];
     if (!pagePermission) {
       throw new NotFoundError(`Page "${page}" not found`);
+    }
+
+    // Check if page supports edit mode when trying to grant edit permission
+    if (action === 'edit' && pagePermission.supportsEditMode === false) {
+      throw new ValidationError(
+        `Page "${pagePermission.displayNameHebrew || pagePermission.displayName}" does not support edit mode. Only view permission can be granted.`
+      );
     }
 
     // Get or create page permission
@@ -687,5 +904,447 @@ export class PermissionsService {
       pagePermission: pagePerm,
       apiPermissions: apiPermissions.length,
     };
+  }
+
+  /**
+   * Grant custom view mode permission to user
+   */
+  async grantCustomModePermission(
+    userId: number,
+    page: string,
+    modeId: string,
+    grantedBy: number
+  ) {
+    // Check if user is approved
+    const user = await prisma.soldier.findUnique({
+      where: { id: userId },
+      select: { isAdmin: true, approvalStatus: true, id: true },
+    });
+
+    if (!user) {
+      throw new NotFoundError('User');
+    }
+
+    if (user.approvalStatus !== 'APPROVED') {
+      throw new ValidationError(`Cannot grant permissions to user with status "${user.approvalStatus}". Only APPROVED users can receive permissions.`);
+    }
+
+    // Check if page exists
+    const pagePermission = PAGE_PERMISSIONS[page];
+    if (!pagePermission) {
+      throw new NotFoundError(`Page "${page}" not found`);
+    }
+
+    // Check if custom mode exists for this page
+    const customMode = pagePermission.customModes?.find(m => m.id === modeId);
+    if (!customMode) {
+      throw new NotFoundError(`Custom mode "${modeId}" not found for page "${page}"`);
+    }
+
+    // Get or create custom mode permission
+    const modePermissionName = `page:${page}:mode:${modeId}`;
+    const modePerm = await this.getOrCreatePermission(
+      'page',
+      `${page}:mode:${modeId}`,
+      `Custom view mode "${customMode.nameHebrew}" for ${pagePermission.displayNameHebrew}`
+    );
+
+    // Grant custom mode permission
+    await this.grantPermission(userId, modePerm.id, grantedBy);
+
+    // Grant API permissions for this custom mode (if specified)
+    const apiPermissions = customMode.viewAPIs || customMode.editAPIs || [];
+    for (const apiPerm of apiPermissions) {
+      const permission = await this.getOrCreatePermission(
+        apiPerm.resource,
+        apiPerm.action,
+        apiPerm.description
+      );
+      await this.grantPermission(userId, permission.id, grantedBy);
+    }
+
+    return {
+      modePermission: modePerm,
+      apiPermissions: apiPermissions.length,
+    };
+  }
+
+  /**
+   * Revoke custom view mode permission from user
+   * Idempotent: if permission doesn't exist, returns success
+   */
+  async revokeCustomModePermission(userId: number, page: string, modeId: string) {
+    const modePermissionName = `page:${page}:mode:${modeId}`;
+    const modePerm = await prisma.permission.findUnique({
+      where: { name: modePermissionName },
+    });
+
+    // If permission type doesn't exist, nothing to revoke
+    if (!modePerm) {
+      return {
+        modePermission: null,
+        message: 'Custom mode permission type not found',
+      };
+    }
+
+    // Check if user actually has this permission
+    const userPermission = await prisma.userPermission.findUnique({
+      where: {
+        userId_permissionId: {
+          userId,
+          permissionId: modePerm.id,
+        },
+      },
+    });
+
+    // If user doesn't have this permission, return success (idempotent)
+    if (!userPermission || !userPermission.isActive) {
+      return {
+        modePermission: modePerm,
+        message: 'Custom mode permission was not granted to this user',
+      };
+    }
+
+    await this.revokePermission(userId, modePerm.id);
+
+    // Revoke associated API permissions
+    const pagePermission = PAGE_PERMISSIONS[page];
+    const customMode = pagePermission?.customModes?.find(m => m.id === modeId);
+    if (customMode) {
+      const apiPermissions = customMode.viewAPIs || customMode.editAPIs || [];
+      for (const apiPerm of apiPermissions) {
+        const permission = await prisma.permission.findUnique({
+          where: { name: `${apiPerm.resource}:${apiPerm.action}` },
+        });
+        if (permission) {
+          await this.revokePermission(userId, permission.id);
+        }
+      }
+    }
+
+    return {
+      modePermission: modePerm,
+    };
+  }
+
+  /**
+   * Grant custom view mode permission to role
+   */
+  async grantCustomModePermissionToRole(
+    roleId: number,
+    page: string,
+    modeId: string,
+    grantedBy: number
+  ) {
+    // Check if page exists
+    const pagePermission = PAGE_PERMISSIONS[page];
+    if (!pagePermission) {
+      throw new NotFoundError(`Page "${page}" not found`);
+    }
+
+    // Check if custom mode exists
+    const customMode = pagePermission.customModes?.find(m => m.id === modeId);
+    if (!customMode) {
+      throw new NotFoundError(`Custom mode "${modeId}" not found for page "${page}"`);
+    }
+
+    // Get or create custom mode permission
+    const modePermissionName = `page:${page}:mode:${modeId}`;
+    const modePerm = await this.getOrCreatePermission(
+      'page',
+      `${page}:mode:${modeId}`,
+      `Custom view mode "${customMode.nameHebrew}" for ${pagePermission.displayNameHebrew}`
+    );
+
+    // Grant to role
+    const existing = await prisma.rolePermission.findUnique({
+      where: {
+        roleId_permissionId: {
+          roleId,
+          permissionId: modePerm.id,
+        },
+      },
+    });
+
+    if (existing) {
+      if (!existing.isActive) {
+        await prisma.rolePermission.update({
+          where: { id: existing.id },
+          data: { isActive: true, grantedBy, grantedAt: new Date() },
+        });
+      }
+    } else {
+      await prisma.rolePermission.create({
+        data: {
+          roleId,
+          permissionId: modePerm.id,
+          grantedBy,
+          isActive: true,
+        },
+      });
+    }
+
+    // Grant API permissions
+    const apiPermissions = customMode.viewAPIs || customMode.editAPIs || [];
+    for (const apiPerm of apiPermissions) {
+      const permission = await this.getOrCreatePermission(
+        apiPerm.resource,
+        apiPerm.action,
+        apiPerm.description
+      );
+      
+      const existingRolePerm = await prisma.rolePermission.findUnique({
+        where: {
+          roleId_permissionId: {
+            roleId,
+            permissionId: permission.id,
+          },
+        },
+      });
+
+      if (!existingRolePerm) {
+        await prisma.rolePermission.create({
+          data: {
+            roleId,
+            permissionId: permission.id,
+            grantedBy,
+            isActive: true,
+          },
+        });
+      } else if (!existingRolePerm.isActive) {
+        await prisma.rolePermission.update({
+          where: { id: existingRolePerm.id },
+          data: { isActive: true, grantedBy, grantedAt: new Date() },
+        });
+      }
+    }
+
+    return {
+      modePermission: modePerm,
+      apiPermissions: apiPermissions.length,
+    };
+  }
+
+  /**
+   * Revoke custom view mode permission from role
+   * Idempotent: if permission doesn't exist, returns success
+   */
+  async revokeCustomModePermissionFromRole(roleId: number, page: string, modeId: string) {
+    const modePermissionName = `page:${page}:mode:${modeId}`;
+    const modePerm = await prisma.permission.findUnique({
+      where: { name: modePermissionName },
+    });
+
+    // If permission type doesn't exist, nothing to revoke
+    if (!modePerm) {
+      return {
+        modePermission: null,
+        message: 'Custom mode permission type not found',
+      };
+    }
+
+    const rolePermission = await prisma.rolePermission.findUnique({
+      where: {
+        roleId_permissionId: {
+          roleId,
+          permissionId: modePerm.id,
+        },
+      },
+    });
+
+    // If role doesn't have this permission, return success (idempotent)
+    if (!rolePermission || !rolePermission.isActive) {
+      return {
+        modePermission: modePerm,
+        message: 'Custom mode permission was not granted to this role',
+      };
+    }
+
+    await prisma.rolePermission.update({
+      where: { id: rolePermission.id },
+      data: { isActive: false },
+    });
+
+    return {
+      modePermission: modePerm,
+    };
+  }
+
+  /**
+   * Revoke page permission from role (automatically revokes API permissions)
+   * Idempotent: if permission doesn't exist, returns success
+   */
+  async revokePagePermissionFromRole(roleId: number, page: string, action: 'view' | 'edit') {
+    // Get page permission
+    const pagePermissionName = `page:${page}:${action}`;
+    const pagePerm = await prisma.permission.findUnique({
+      where: { name: pagePermissionName },
+    });
+
+    // If permission type doesn't exist in system, nothing to revoke
+    if (!pagePerm) {
+      return {
+        pagePermission: null,
+        apiPermissions: 0,
+        message: 'Permission type not found in system',
+      };
+    }
+
+    // Check if role actually has this permission
+    const rolePermission = await prisma.rolePermission.findUnique({
+      where: {
+        roleId_permissionId: {
+          roleId,
+          permissionId: pagePerm.id,
+        },
+      },
+    });
+
+    // If role doesn't have this permission, return success (idempotent)
+    if (!rolePermission || !rolePermission.isActive) {
+      return {
+        pagePermission: pagePerm,
+        apiPermissions: 0,
+        message: 'Permission was not granted to this role',
+      };
+    }
+
+    // Revoke page permission from role
+    await prisma.rolePermission.update({
+      where: { id: rolePermission.id },
+      data: { isActive: false },
+    });
+
+    // Get all API permissions for this page and action
+    const apiPermissions = getAPIPermissionsForPage(page, action);
+
+    // Revoke all API permissions from role (only if they exist and are active)
+    let revokedCount = 0;
+    for (const apiPerm of apiPermissions) {
+      const permission = await prisma.permission.findUnique({
+        where: { name: `${apiPerm.resource}:${apiPerm.action}` },
+      });
+      if (permission) {
+        const rolePerm = await prisma.rolePermission.findUnique({
+          where: {
+            roleId_permissionId: {
+              roleId,
+              permissionId: permission.id,
+            },
+          },
+        });
+        if (rolePerm && rolePerm.isActive) {
+          await prisma.rolePermission.update({
+            where: { id: rolePerm.id },
+            data: { isActive: false },
+          });
+          revokedCount++;
+        }
+      }
+    }
+
+    return {
+      pagePermission: pagePerm,
+      apiPermissions: revokedCount,
+    };
+  }
+
+  /**
+   * Get role's page permissions (including custom view modes)
+   */
+  async getRolePagePermissions(roleId: number) {
+    const role = await prisma.role.findUnique({
+      where: { id: roleId },
+    });
+
+    if (!role) {
+      throw new NotFoundError('Role');
+    }
+
+    // Get all role permissions
+    const rolePermissions = await prisma.rolePermission.findMany({
+      where: {
+        roleId,
+        isActive: true,
+      },
+      include: {
+        permission: true,
+      },
+    });
+
+    const pagePermissions: Record<string, { view: boolean; edit: boolean; customModes?: string[] }> = {};
+
+    // Initialize all pages
+    Object.keys(PAGE_PERMISSIONS).forEach(page => {
+      pagePermissions[page] = { view: false, edit: false, customModes: [] };
+    });
+
+    // Check role permissions
+    rolePermissions.forEach((rp: any) => {
+      const perm = rp.permission;
+      if (perm.resource === 'page') {
+        // Check for standard view/edit permissions
+        const standardMatch = perm.action.match(/^(.+):(view|edit)$/);
+        if (standardMatch) {
+          const [, page, action] = standardMatch;
+          if (pagePermissions[page]) {
+            pagePermissions[page][action as 'view' | 'edit'] = true;
+          }
+        } else {
+          // Check for custom mode permissions
+          const customMatch = perm.action.match(/^(.+):mode:(.+)$/);
+          if (customMatch) {
+            const [, page, modeId] = customMatch;
+            if (pagePermissions[page] && pagePermissions[page].customModes) {
+              if (!pagePermissions[page].customModes!.includes(modeId)) {
+                pagePermissions[page].customModes!.push(modeId);
+              }
+            }
+          }
+        }
+      }
+    });
+
+    return pagePermissions;
+  }
+
+  /**
+   * Bulk grant page permissions to user
+   */
+  async bulkGrantPagePermissionsToUser(
+    userId: number,
+    permissions: Array<{ page: string; action: 'view' | 'edit' }>,
+    grantedBy: number
+  ) {
+    const results = [];
+    for (const perm of permissions) {
+      try {
+        const result = await this.grantPagePermission(userId, perm.page, perm.action, grantedBy);
+        results.push({ ...perm, success: true, result });
+      } catch (error) {
+        results.push({ ...perm, success: false, error: error instanceof Error ? error.message : 'Unknown error' });
+      }
+    }
+    return results;
+  }
+
+  /**
+   * Bulk grant page permissions to role
+   */
+  async bulkGrantPagePermissionsToRole(
+    roleId: number,
+    permissions: Array<{ page: string; action: 'view' | 'edit' }>,
+    grantedBy: number
+  ) {
+    const results = [];
+    for (const perm of permissions) {
+      try {
+        const result = await this.grantPagePermissionToRole(roleId, perm.page, perm.action, grantedBy);
+        results.push({ ...perm, success: true, result });
+      } catch (error) {
+        results.push({ ...perm, success: false, error: error instanceof Error ? error.message : 'Unknown error' });
+      }
+    }
+    return results;
   }
 }

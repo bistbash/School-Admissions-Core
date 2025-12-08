@@ -3,6 +3,7 @@ import { StudentsController } from './students.controller';
 import { StudentsUploadController } from './students-upload.controller';
 import { authenticate } from '../../lib/auth/auth';
 import { requireAPIKey, strictRateLimiter, fileUploadRateLimiter, requireAdmin } from '../../lib/security/security';
+import { requireResourcePagePermission } from '../../lib/permissions/page-permission-middleware';
 import { validateRequest } from '../../lib/utils/validation';
 import { z } from 'zod';
 
@@ -43,17 +44,21 @@ const updateStudentSchema = z.object({
 // SECURITY: clear-all requires admin access (first registered user only)
 router.delete('/clear-all', strictRateLimiter, requireAdmin, studentsController.deleteAll.bind(studentsController));
 // File upload with special rate limiting (trusted users get higher limits)
-router.post('/upload', fileUploadRateLimiter, studentsUploadController.upload.bind(studentsUploadController));
+// Requires 'students' page with 'edit' permission
+router.post('/upload', requireResourcePagePermission('students', 'create'), fileUploadRateLimiter, studentsUploadController.upload.bind(studentsUploadController));
 // Promotion endpoints - admin only (sensitive operations)
 router.post('/promote-all', requireAdmin, studentsController.promoteAllCohorts.bind(studentsController));
 router.post('/cohorts/:cohortId/promote', requireAdmin, studentsController.promoteCohort.bind(studentsController));
-router.post('/', validateRequest(createStudentSchema), studentsController.create.bind(studentsController));
-router.get('/', studentsController.getAll.bind(studentsController));
-router.get('/id-number/:idNumber', studentsController.getByIdNumber.bind(studentsController));
-// Parameterized routes come last
-router.get('/:id', studentsController.getById.bind(studentsController));
-router.put('/:id', validateRequest(updateStudentSchema), studentsController.update.bind(studentsController));
-router.delete('/:id', studentsController.delete.bind(studentsController));
+
+// View permissions - requires 'students' page with 'view' permission
+router.get('/', requireResourcePagePermission('students', 'read'), studentsController.getAll.bind(studentsController));
+router.get('/id-number/:idNumber', requireResourcePagePermission('students', 'read'), studentsController.getByIdNumber.bind(studentsController));
+router.get('/:id', requireResourcePagePermission('students', 'read'), studentsController.getById.bind(studentsController));
+
+// Edit permissions - requires 'students' page with 'edit' permission
+router.post('/', requireResourcePagePermission('students', 'create'), validateRequest(createStudentSchema), studentsController.create.bind(studentsController));
+router.put('/:id', requireResourcePagePermission('students', 'update'), validateRequest(updateStudentSchema), studentsController.update.bind(studentsController));
+router.delete('/:id', requireResourcePagePermission('students', 'delete'), studentsController.delete.bind(studentsController));
 
 export default router;
 

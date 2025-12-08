@@ -76,6 +76,8 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
     const apiKey = req.headers['x-api-key'] as string;
 
     // Try API key first
+    // SECURITY: If API key belongs to an admin user, they automatically get access to all endpoints
+    // The permission middleware will check if userId is admin and grant full access
     if (apiKey) {
       const { verifyAPIKey, getAPIKeyInfo } = await import('../api-keys/apiKeys');
       const isValid = await verifyAPIKey(apiKey);
@@ -92,6 +94,7 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
           };
           
           // If API key has userId, attach user info
+          // This userId will be checked by permission middleware - if user is admin, they get full access
           if (keyInfo.userId) {
             (req as any).user = {
               userId: keyInfo.userId,
@@ -134,20 +137,59 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
 
 /**
  * Optional authentication - doesn't fail if no token
+ * Supports both JWT tokens and API keys
  */
-export function optionalAuthenticate(req: Request, res: Response, next: NextFunction) {
+export async function optionalAuthenticate(req: Request, res: Response, next: NextFunction) {
   try {
     const authHeader = req.headers.authorization;
-    
+    const apiKey = req.headers['x-api-key'] as string;
+
+    // Try API key first (if provided)
+    if (apiKey) {
+      try {
+        const { verifyAPIKey, getAPIKeyInfo } = await import('../api-keys/apiKeys');
+        const isValid = await verifyAPIKey(apiKey);
+        
+        if (isValid) {
+          const keyInfo = await getAPIKeyInfo(apiKey);
+          if (keyInfo) {
+            // Attach API key info to request
+            (req as any).apiKey = {
+              id: keyInfo.id,
+              name: keyInfo.name,
+              userId: keyInfo.userId,
+              permissions: keyInfo.permissions ? JSON.parse(keyInfo.permissions) : null,
+            };
+            
+            // If API key has userId, attach user info
+            if (keyInfo.userId) {
+              (req as any).user = {
+                userId: keyInfo.userId,
+              };
+            }
+            
+            return next();
+          }
+        }
+      } catch (error) {
+        // Ignore API key errors for optional auth - fall through to JWT token check
+      }
+    }
+
+    // Fall back to JWT token (if provided)
     if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.substring(7);
-      const payload = verifyToken(token);
-      (req as any).user = payload;
+      try {
+        const token = authHeader.substring(7);
+        const payload = verifyToken(token);
+        (req as any).user = payload;
+      } catch (error) {
+        // Ignore JWT token errors for optional auth
+      }
     }
     
     next();
   } catch (error) {
-    // Ignore errors for optional auth
+    // Ignore all errors for optional auth
     next();
   }
 }

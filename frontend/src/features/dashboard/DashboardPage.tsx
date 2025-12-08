@@ -4,6 +4,7 @@ import { useAuth } from '../auth/AuthContext';
 import { apiClient } from '../../shared/lib/api';
 import { useEffect, useState } from 'react';
 import { cn } from '../../shared/lib/utils';
+import { PageWrapper } from '../../shared/components/PageWrapper';
 
 export function DashboardPage() {
   const { user } = useAuth();
@@ -67,7 +68,8 @@ export function DashboardPage() {
   ];
 
   return (
-    <div className="space-y-12 animate-in max-w-6xl mx-auto">
+    <PageWrapper>
+      <div className="space-y-12 animate-in max-w-6xl mx-auto">
       {/* Header */}
       <div className="space-y-1">
         <h1 className="text-2xl font-medium tracking-tight text-black dark:text-white">
@@ -180,6 +182,7 @@ export function DashboardPage() {
           </CardContent>
         </Card>
       )}
-    </div>
+      </div>
+    </PageWrapper>
   );
 }

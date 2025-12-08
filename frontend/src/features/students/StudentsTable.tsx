@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Edit, Trash2, Eye, MoreVertical } from 'lucide-react';
 import { Button } from '../../shared/ui/Button';
 import { cn } from '../../shared/lib/utils';
+import { usePageMode } from '../permissions/PageModeContext';
 
 interface Student {
   id: number;
@@ -49,6 +50,7 @@ const statusColors: Record<string, string> = {
 };
 
 export function StudentsTable({ students, onRefresh }: StudentsTableProps) {
+  const { mode } = usePageMode();
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
 
   const toggleRow = (id: number) => {
@@ -196,17 +198,19 @@ export function StudentsTable({ students, onRefresh }: StudentsTableProps) {
                         </div>
                       </div>
                       <div className="mt-4 flex items-center gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            // TODO: Implement edit functionality
-                            console.log('Edit student', student.id);
-                          }}
-                        >
-                          <Edit className="h-3 w-3 ml-1" />
-                          ערוך
-                        </Button>
+                        {mode === 'edit' && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              // TODO: Implement edit functionality
+                              console.log('Edit student', student.id);
+                            }}
+                          >
+                            <Edit className="h-3 w-3 ml-1" />
+                            ערוך
+                          </Button>
+                        )}
                         <Button
                           variant="outline"
                           size="sm"

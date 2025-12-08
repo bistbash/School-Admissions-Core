@@ -29,6 +29,8 @@ import { getMetrics, startMetricsLogging } from './lib/utils/metrics';
 import { logger } from './lib/utils/logger';
 import { prisma } from './lib/database/prisma';
 import { validateEnv } from './lib/utils/env';
+import { requireAPIPermission } from './lib/permissions/api-permission-middleware';
+import { authenticate, optionalAuthenticate } from './lib/auth/auth';
 
 dotenv.config();
 
@@ -107,6 +109,46 @@ app.use('/api', apiRateLimiter);
 // Audit logging middleware - logs all requests
 app.use(auditMiddleware);
 
+// List of public API endpoints that don't require authentication
+const PUBLIC_API_ENDPOINTS = [
+  '/api/auth/login',
+  '/api/auth/register',
+  '/api/docs', // Docs are public but will show filtered content if authenticated
+];
+
+// Helper to check if endpoint is public
+function isPublicEndpoint(req: Request): boolean {
+  const fullPath = req.originalUrl?.split('?')[0] || req.url.split('?')[0];
+  return PUBLIC_API_ENDPOINTS.some(endpoint => fullPath === endpoint || fullPath.startsWith(endpoint + '/'));
+}
+
+// Global authentication for API routes (except public endpoints)
+// This ensures authentication happens before permission checking
+app.use('/api', (req, res, next) => {
+  // Public endpoints don't need authentication
+  if (isPublicEndpoint(req)) {
+    // Use optional auth for docs (to show filtered docs if authenticated)
+    if (req.originalUrl?.startsWith('/api/docs') || req.url.startsWith('/api/docs')) {
+      return optionalAuthenticate(req, res, next);
+    }
+    // Other public endpoints (login, register) don't need any auth
+    return next();
+  }
+  // All other API routes require authentication
+  return authenticate(req, res, next);
+});
+
+// API Permission middleware - checks permissions for all API routes (except public auth endpoints)
+// This runs after authentication, so user info is available
+app.use('/api', (req, res, next) => {
+  // Skip permission check for public auth endpoints and docs (docs handles its own filtering)
+  if (isPublicEndpoint(req)) {
+    return next();
+  }
+  // Apply permission check to all other API routes
+  requireAPIPermission(req, res, next);
+});
+
 // Health check endpoints
 app.get('/health', healthCheck);
 app.get('/ready', readinessCheck); // Kubernetes readiness probe
@@ -148,6 +190,37 @@ app.use(errorHandler);
 
 // Start metrics logging
 startMetricsLogging();
+
+// Auto-seed database if empty (only in development and if AUTO_SEED is enabled)
+if (process.env.NODE_ENV !== 'production' && process.env.AUTO_SEED === 'true') {
+  (async () => {
+    try {
+      const { seedDatabase } = await import('./lib/database/seed');
+      const userCount = await prisma.soldier.count();
+      if (userCount === 0) {
+        logger.info('Database is empty. Running auto-seed...');
+        const result = await seedDatabase();
+        if (result.success) {
+          logger.info(
+            {
+              adminEmail: result.admin.email,
+              adminId: result.admin.id,
+            },
+            'Auto-seed completed successfully'
+          );
+          console.log('\n✅ Database auto-seeded!');
+          console.log(`📧 Admin Email: ${result.admin.email}`);
+          if ('password' in result.admin) {
+            console.log(`🔑 Admin Password: ${result.admin.password}`);
+          }
+          console.log('⚠️  IMPORTANT: Change the admin password after first login!\n');
+        }
+      }
+    } catch (error: any) {
+      logger.warn({ error: error.message }, 'Auto-seed failed (non-critical)');
+    }
+  })();
+}
 
 // Graceful shutdown handler
 let server: any;

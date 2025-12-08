@@ -14,31 +14,31 @@ model Department {
 }
 
 model Role {
-  id             Int             @id @default(autoincrement())
-  name           String
-  soldiers       Soldier[]
+  id              Int              @id @default(autoincrement())
+  name            String
+  soldiers        Soldier[]
   rolePermissions RolePermission[]
 }
 
 model Soldier {
-  id                    Int        @id @default(autoincrement())
-  personalNumber        String?    @unique // Optional - filled on first login
-  name                  String? // Optional - filled on first login
-  email                 String     @unique
-  password              String // Hashed password (temporary password set by admin)
-  type                  String? // "CONSCRIPT" or "PERMANENT" - Optional, filled on first login
-  department            Department? @relation(fields: [departmentId], references: [id])
-  departmentId          Int?
-  role                  Role?      @relation(fields: [roleId], references: [id])
-  roleId                Int?
-  isCommander           Boolean    @default(false)
-  isAdmin               Boolean    @default(false) // Admin user - first registered user becomes admin
-  approvalStatus        String     @default("CREATED") // CREATED, PENDING, APPROVED, REJECTED
-  needsProfileCompletion Boolean   @default(true) // True if user needs to complete profile on first login
-  createdAt             DateTime   @default(now())
-  updatedAt             DateTime   @updatedAt
-  permissions           UserPermission[] // User permissions
-  
+  id                     Int              @id @default(autoincrement())
+  personalNumber         String?          @unique // Optional - filled on first login
+  name                   String? // Optional - filled on first login
+  email                  String           @unique
+  password               String // Hashed password (temporary password set by admin)
+  type                   String? // "CONSCRIPT" or "PERMANENT" - Optional, filled on first login
+  department             Department?      @relation(fields: [departmentId], references: [id])
+  departmentId           Int?
+  role                   Role?            @relation(fields: [roleId], references: [id])
+  roleId                 Int?
+  isCommander            Boolean          @default(false)
+  isAdmin                Boolean          @default(false) // Admin user - first registered user becomes admin
+  approvalStatus         String           @default("CREATED") // CREATED, PENDING, APPROVED, REJECTED
+  needsProfileCompletion Boolean          @default(true) // True if user needs to complete profile on first login
+  createdAt              DateTime         @default(now())
+  updatedAt              DateTime         @updatedAt
+  permissions            UserPermission[] // User permissions
+
   @@index([isAdmin])
   @@index([approvalStatus])
   @@index([needsProfileCompletion])
@@ -54,6 +54,7 @@ model AuditLog {
   id           Int      @id @default(autoincrement())
   userId       Int? // User who performed the action (null for unauthenticated)
   userEmail    String? // Email of user (for quick reference)
+  apiKeyId     Int? // API key ID if request was made with API key (for tracking API usage)
   action       String // Action type: LOGIN, LOGOUT, CREATE, UPDATE, DELETE, READ, AUTH_FAILED, etc.
   resource     String // Resource type: SOLDIER, DEPARTMENT, ROLE, ROOM, AUTH
   resourceId   Int? // ID of the affected resource (null for list operations)
@@ -62,6 +63,11 @@ model AuditLog {
   userAgent    String? // Client user agent
   status       String // SUCCESS, FAILURE, ERROR
   errorMessage String? // Error message if status is FAILURE or ERROR
+  httpMethod   String? // HTTP method (GET, POST, PUT, DELETE, etc.)
+  httpPath     String? // HTTP path (e.g., /api/students)
+  requestSize  Int? // Request body size in bytes
+  responseSize Int? // Response body size in bytes
+  responseTime Int? // Response time in milliseconds
   createdAt    DateTime @default(now())
 
   // SOC Analyst fields
@@ -73,6 +79,7 @@ model AuditLog {
   resolvedBy     Int? // User ID who resolved it
 
   @@index([userId])
+  @@index([apiKeyId])
   @@index([action])
   @@index([resource])
   @@index([createdAt])
@@ -80,6 +87,7 @@ model AuditLog {
   @@index([incidentStatus])
   @@index([priority])
   @@index([assignedTo])
+  @@index([httpMethod, httpPath])
 }
 
 model BlockedIP {
@@ -133,7 +141,7 @@ model Cohort {
   id           Int       @id @default(autoincrement())
   name         String    @unique // Cohort name (e.g., "Cohort 2024")
   startYear    Int // Start year
-  currentGrade String? // Current grade (ט', י', י"א, י"ב, י"ג, י"ד) - null for next cohort (in selection)
+  currentGrade String? // Current grade (9th, 10th, 11th, 12th, 13th, 14th) - null for next cohort (in selection)
   isActive     Boolean   @default(true)
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
@@ -144,20 +152,20 @@ model Cohort {
 }
 
 model Student {
-  id        Int     @id @default(autoincrement())
-  idNumber  String  @unique // ID number
-  firstName String // First name
-  lastName  String // Last name
-  gender    String // Gender: MALE, FEMALE
+  id             Int      @id @default(autoincrement())
+  idNumber       String   @unique // ID number
+  firstName      String // First name
+  lastName       String // Last name
+  gender         String // Gender: MALE, FEMALE
   // DEPRECATED: These fields are kept for backward compatibility during migration
   // Use Enrollment table for historical and current class tracking
-  grade     String? // Current grade (deprecated - use Enrollment)
-  parallel  String? // Parallel class (A, B, C, etc.) (deprecated - use Enrollment)
-  track     String? // Track/major (deprecated - use Enrollment)
-  cohortId  Int // Starting cohort
-  cohort    Cohort  @relation(fields: [cohortId], references: [id])
+  grade          String? // Current grade (deprecated - use Enrollment)
+  parallel       String? // Parallel class (A, B, C, etc.) (deprecated - use Enrollment)
+  track          String? // Track/major (deprecated - use Enrollment)
+  cohortId       Int // Starting cohort
+  cohort         Cohort   @relation(fields: [cohortId], references: [id])
   studyStartDate DateTime // Date when student started studying (required)
-  status    String  @default("ACTIVE") // ACTIVE, GRADUATED, LEFT, ARCHIVED
+  status         String   @default("ACTIVE") // ACTIVE, GRADUATED, LEFT, ARCHIVED
 
   // Additional fields from mashov system
   dateOfBirth DateTime? // Date of birth
@@ -253,25 +261,25 @@ model StudentExit {
 }
 
 model Track {
-  id          Int       @id @default(autoincrement())
-  name        String    @unique // Track name
+  id          Int      @id @default(autoincrement())
+  name        String   @unique // Track name
   description String? // Optional description
-  isActive    Boolean   @default(true)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@index([isActive])
   @@index([name])
 }
 
 model Permission {
-  id             Int             @id @default(autoincrement())
-  name           String          @unique // Permission name (e.g., "students.read", "students.write")
-  description    String? // Description of what this permission allows
-  resource       String // Resource type (e.g., "students", "cohorts", "users")
-  action         String // Action type (e.g., "read", "write", "delete", "manage")
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
+  id              Int              @id @default(autoincrement())
+  name            String           @unique // Permission name (e.g., "students.read", "students.write")
+  description     String? // Description of what this permission allows
+  resource        String // Resource type (e.g., "students", "cohorts", "users")
+  action          String // Action type (e.g., "read", "write", "delete", "manage")
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
   userPermissions UserPermission[]
   rolePermissions RolePermission[]
 
@@ -281,14 +289,14 @@ model Permission {
 }
 
 model UserPermission {
-  id           Int       @id @default(autoincrement())
+  id           Int        @id @default(autoincrement())
   userId       Int // User ID
-  user         Soldier   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         Soldier    @relation(fields: [userId], references: [id], onDelete: Cascade)
   permissionId Int // Permission ID
   permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
-  grantedBy   Int? // Admin user ID who granted this permission
-  grantedAt    DateTime  @default(now())
-  isActive     Boolean   @default(true) // Can be deactivated without deleting
+  grantedBy    Int? // Admin user ID who granted this permission
+  grantedAt    DateTime   @default(now())
+  isActive     Boolean    @default(true) // Can be deactivated without deleting
 
   @@unique([userId, permissionId])
   @@index([userId])
@@ -297,14 +305,14 @@ model UserPermission {
 }
 
 model RolePermission {
-  id           Int       @id @default(autoincrement())
+  id           Int        @id @default(autoincrement())
   roleId       Int // Role ID
-  role         Role      @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
   permissionId Int // Permission ID
   permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
-  grantedBy   Int? // Admin user ID who granted this permission
-  grantedAt    DateTime  @default(now())
-  isActive     Boolean   @default(true) // Can be deactivated without deleting
+  grantedBy    Int? // Admin user ID who granted this permission
+  grantedAt    DateTime   @default(now())
+  isActive     Boolean    @default(true) // Can be deactivated without deleting
 
   @@unique([roleId, permissionId])
   @@index([roleId])

@@ -17,36 +17,39 @@ import { Search } from '../ui/Search';
 import { authStorage } from '../../features/auth/auth';
 import { useAuth } from '../../features/auth/AuthContext';
 import { usePermissions } from '../../features/permissions/PermissionsContext';
+import { PageModeToggle } from '../../features/permissions/PageModeToggle';
 import { cn } from '../lib/utils';
 
 interface NavItem {
   name: string;
   href: string;
   icon: React.ComponentType<{ className?: string }>;
-  permission?: string; // Optional permission required to see this item
+  page: string; // Page name for permission check
 }
 
-// Navigation items - will be filtered by permissions
+// Navigation items - will be filtered by page permissions
 const allNavigationItems: NavItem[] = [
-  { name: 'לוח בקרה', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'תלמידים', href: '/students', icon: GraduationCap },
-  { name: 'ניהול משאבים', href: '/resources', icon: Building2 },
-  { name: 'מרכז אבטחה', href: '/soc', icon: Shield, permission: 'soc.read' },
-  { name: 'מפתחות API', href: '/api', icon: Key },
-  { name: 'הגדרות', href: '/settings', icon: Settings },
+  { name: 'לוח בקרה', href: '/dashboard', icon: LayoutDashboard, page: 'dashboard' },
+  { name: 'תלמידים', href: '/students', icon: GraduationCap, page: 'students' },
+  { name: 'ניהול משאבים', href: '/resources', icon: Building2, page: 'resources' },
+  { name: 'מרכז אבטחה', href: '/soc', icon: Shield, page: 'soc' },
+  { name: 'מפתחות API', href: '/api', icon: Key, page: 'api-keys' },
+  { name: 'הגדרות', href: '/settings', icon: Settings, page: 'settings' },
 ];
 
 export function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuth();
-  const { hasPermission } = usePermissions();
+  const { hasPagePermission } = usePermissions();
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
 
-  // Filter navigation items based on permissions
+  // Filter navigation items based on page permissions - only show pages user can view
   const navigation = allNavigationItems.filter(item => {
-    if (!item.permission) return true; // No permission required
-    return hasPermission(item.permission);
+    // Admins see everything
+    if (user?.isAdmin) return true;
+    // Check if user has view permission for this page
+    return hasPagePermission(item.page, 'view');
   });
 
   const handleLogout = () => {
@@ -114,6 +117,7 @@ export function Layout() {
               <Search />
             </div>
             <div className="flex items-center gap-x-3">
+              <PageModeToggle />
               <ThemeToggle />
               {user && (
                 <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-[#080808] border border-gray-200 dark:border-[#1F1F1F]">

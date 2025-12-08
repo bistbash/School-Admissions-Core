@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { TracksController } from './tracks.controller';
 import { authenticate } from '../../lib/auth/auth';
 import { validateRequest } from '../../lib/utils/validation';
+import { requireResourcePagePermission } from '../../lib/permissions/page-permission-middleware';
 import { z } from 'zod';
 
 const router = Router();
@@ -21,10 +22,13 @@ const updateTrackSchema = z.object({
   isActive: z.boolean().optional(),
 });
 
-router.post('/', validateRequest(createTrackSchema), tracksController.create.bind(tracksController));
-router.get('/', tracksController.getAll.bind(tracksController));
-router.get('/:id', tracksController.getById.bind(tracksController));
-router.put('/:id', validateRequest(updateTrackSchema), tracksController.update.bind(tracksController));
-router.delete('/:id', tracksController.delete.bind(tracksController));
+// View permissions - requires 'tracks' page with 'view' permission
+router.get('/', requireResourcePagePermission('tracks', 'read'), tracksController.getAll.bind(tracksController));
+router.get('/:id', requireResourcePagePermission('tracks', 'read'), tracksController.getById.bind(tracksController));
+
+// Edit permissions - requires 'tracks' page with 'edit' permission
+router.post('/', requireResourcePagePermission('tracks', 'create'), validateRequest(createTrackSchema), tracksController.create.bind(tracksController));
+router.put('/:id', requireResourcePagePermission('tracks', 'update'), validateRequest(updateTrackSchema), tracksController.update.bind(tracksController));
+router.delete('/:id', requireResourcePagePermission('tracks', 'delete'), tracksController.delete.bind(tracksController));
 
 export default router;

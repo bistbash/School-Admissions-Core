@@ -37,8 +37,8 @@ apiClient.interceptors.response.use(
       authStorage.removeToken();
       // Don't auto-reload - let React components handle state updates
     }
-    const message = error.response?.data?.error || error.message || 'An error occurred';
-    return Promise.reject(new Error(message));
+    // Preserve the original error object so error.response is still accessible
+    return Promise.reject(error);
   }
 );
 

@@ -1,4 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
+import { PAGE_PERMISSIONS, getAPIPermissionsForPage, APIPermission } from '../../lib/permissions/permission-registry';
+import { hasScopedPermission } from '../../lib/permissions/permissions';
 
 interface EndpointInfo {
   method: string;
@@ -17,14 +19,161 @@ interface EndpointInfo {
   };
 }
 
+/**
+ * Check if user is admin (cached for performance)
+ */
+const adminCacheDocs = new Map<number, boolean>();
+const ADMIN_CACHE_TTL_DOCS = 5 * 60 * 1000; // 5 minutes
+
+async function isUserAdminDocs(userId: number): Promise<boolean> {
+  // Check cache first
+  if (adminCacheDocs.has(userId)) {
+    return adminCacheDocs.get(userId)!;
+  }
+
+  // Check database
+  const { prisma } = await import('../../lib/database/prisma');
+  const user = await prisma.soldier.findUnique({
+    where: { id: userId },
+    select: { isAdmin: true },
+  });
+
+  const isAdmin = user?.isAdmin ?? false;
+  
+  // Cache the result
+  adminCacheDocs.set(userId, isAdmin);
+  
+  // Clear cache after TTL
+  setTimeout(() => {
+    adminCacheDocs.delete(userId);
+  }, ADMIN_CACHE_TTL_DOCS);
+
+  return isAdmin;
+}
+
+/**
+ * Check if user has access to an API endpoint
+ * SECURITY: Admin users (including those using API keys) automatically get access to everything
+ */
+async function hasAccessToEndpoint(
+  userId: number | undefined,
+  method: string,
+  path: string
+): Promise<boolean> {
+  // Public endpoints are always accessible
+  if (path === '/api/auth/login' || path === '/api/auth/register') {
+    return true;
+  }
+
+  // If no user, only public endpoints are accessible
+  if (!userId) {
+    return false;
+  }
+
+  // Admins have access to everything - check this FIRST for performance
+  // This works for both JWT tokens and API keys (as long as they have userId)
+  const isAdmin = await isUserAdminDocs(userId);
+  if (isAdmin) {
+    return true;
+  }
+
+  // Normalize path
+  const normalizedPath = path.split('?')[0].replace(/\/$/, '');
+
+  // Check all page permissions
+  for (const [pageKey, pagePermission] of Object.entries(PAGE_PERMISSIONS)) {
+    // Check view APIs
+    for (const apiPerm of pagePermission.viewAPIs) {
+      if (matchesAPIPermission(apiPerm, method, normalizedPath)) {
+        const permissionName = `page:${pageKey}:view`;
+        const hasPermission = await hasScopedPermission(userId, permissionName);
+        if (hasPermission) return true;
+      }
+    }
+    
+    // Check edit APIs
+    for (const apiPerm of pagePermission.editAPIs) {
+      if (matchesAPIPermission(apiPerm, method, normalizedPath)) {
+        const permissionName = `page:${pageKey}:edit`;
+        const hasPermission = await hasScopedPermission(userId, permissionName);
+        if (hasPermission) return true;
+      }
+    }
+  }
+
+  // Check direct resource:action permissions
+  const resource = extractResourceFromPath(normalizedPath);
+  const action = extractActionFromMethod(method);
+  
+  if (resource && action) {
+    const permissionName = `${resource}:${action}`;
+    return await hasScopedPermission(userId, permissionName);
+  }
+
+  return false;
+}
+
+/**
+ * Check if an API permission matches the request
+ */
+function matchesAPIPermission(apiPerm: APIPermission, method: string, path: string): boolean {
+  if (apiPerm.method !== method) {
+    return false;
+  }
+
+  // Replace path parameters (e.g., :id, :idNumber) with [^/]+ pattern for regex matching
+  // This matches any characters except slashes (supports numeric, alphanumeric, UUIDs, etc.)
+  // Note: We don't escape forward slashes - they're already literal in the path string
+  const pattern = apiPerm.path.replace(/:[^/]+/g, '[^/]+');
+
+  const regex = new RegExp(`^${pattern}$`);
+  return regex.test(path);
+}
+
+/**
+ * Extract resource name from path
+ */
+function extractResourceFromPath(path: string): string | null {
+  if (path.includes('/students')) return 'students';
+  if (path.includes('/soldiers')) return 'soldiers';
+  if (path.includes('/departments')) return 'departments';
+  if (path.includes('/roles')) return 'roles';
+  if (path.includes('/rooms')) return 'rooms';
+  if (path.includes('/cohorts')) return 'cohorts';
+  if (path.includes('/tracks')) return 'tracks';
+  if (path.includes('/classes')) return 'classes';
+  if (path.includes('/student-exits')) return 'student-exits';
+  if (path.includes('/permissions')) return 'permissions';
+  if (path.includes('/api-keys')) return 'api-keys';
+  if (path.includes('/soc')) return 'soc';
+  if (path.includes('/auth')) return 'auth';
+  return null;
+}
+
+/**
+ * Extract action from HTTP method
+ */
+function extractActionFromMethod(method: string): string | null {
+  if (method === 'GET') return 'read';
+  if (method === 'POST') return 'create';
+  if (method === 'PUT' || method === 'PATCH') return 'update';
+  if (method === 'DELETE') return 'delete';
+  return null;
+}
+
 export class DocsController {
   /**
-   * Get API documentation
+   * Get API documentation (filtered by user permissions)
    * GET /api/docs
    */
   async getDocs(req: Request, res: Response, next: NextFunction) {
     try {
       const baseUrl = `${req.protocol}://${req.get('host')}`;
+      
+      // Get user ID from request
+      const user = (req as any).user;
+      const apiKey = (req as any).apiKey;
+      const userId = user?.userId || apiKey?.userId;
       
       const endpoints: Record<string, EndpointInfo[]> = {
         authentication: [
@@ -535,11 +684,46 @@ export class DocsController {
         ],
       };
 
+      // Filter endpoints based on user permissions
+      const filteredEndpoints: Record<string, EndpointInfo[]> = {};
+      
+      for (const [category, categoryEndpoints] of Object.entries(endpoints)) {
+        const accessibleEndpoints: EndpointInfo[] = [];
+        
+        for (const endpoint of categoryEndpoints) {
+          // Public endpoints are always accessible
+          if (endpoint.authentication === 'public') {
+            accessibleEndpoints.push(endpoint);
+            continue;
+          }
+          
+          // If no user, skip non-public endpoints
+          if (!userId) {
+            continue;
+          }
+          
+          // Check if user has access to this endpoint
+          const hasAccess = await hasAccessToEndpoint(userId, endpoint.method, endpoint.path);
+          if (hasAccess) {
+            accessibleEndpoints.push(endpoint);
+          }
+        }
+        
+        // Only include category if it has accessible endpoints
+        if (accessibleEndpoints.length > 0) {
+          filteredEndpoints[category] = accessibleEndpoints;
+        }
+      }
+
       const documentation = {
         title: 'School Admissions Core API Documentation',
         version: '1.0.0',
         baseUrl,
-        description: 'Complete API documentation for all available endpoints',
+        description: userId 
+          ? 'API documentation filtered by your permissions. You only see endpoints you have access to.'
+          : 'Complete API documentation for all available endpoints. Authenticate to see endpoints you have access to.',
+        authenticated: !!userId,
+        userId: userId || null,
         authentication: {
           jwt: {
             description: 'Include JWT token in Authorization header',
@@ -562,7 +746,7 @@ export class DocsController {
             fileUpload: '50 uploads per hour (50MB max)',
           },
         },
-        endpoints,
+        endpoints: filteredEndpoints,
         security: {
           csrf: 'CSRF protection enabled for state-changing operations',
           https: 'HTTPS enforced in production',

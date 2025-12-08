@@ -507,6 +507,11 @@ export class AuthService {
       throw new ValidationError('Cannot modify the first created user (system administrator)');
     }
 
+    // Prevent admin from resetting their own password - they should use password change in settings
+    if (userId === resetBy) {
+      throw new ValidationError('You cannot reset your own password from here. Please use password change in user settings.');
+    }
+
     const soldier = await prisma.soldier.findUnique({
       where: { id: userId },
     });
@@ -552,6 +557,11 @@ export class AuthService {
     // Prevent modifying the first created user
     if (await this.isFirstCreatedUser(userId)) {
       throw new ValidationError('Cannot modify the first created user (system administrator)');
+    }
+
+    // Prevent admin from editing themselves - they should use user settings
+    if (userId === updatedBy) {
+      throw new ValidationError('You cannot edit your own account from here. Please use user settings to update your personal information.');
     }
 
     const soldier = await prisma.soldier.findUnique({

@@ -25,6 +25,12 @@
   - דרך scripts
   - דרך database
 
+- **[DATABASE_SEEDING.md](./DATABASE_SEEDING.md)** - מדריך ל-Database Seeding
+  - יצירת משתמש אדמין ראשוני
+  - הגדרת משתני סביבה
+  - Auto-seed אוטומטי
+  - פתרון בעיות
+
 ## 🎯 שימוש מהיר
 
 ### בדיקת Admin

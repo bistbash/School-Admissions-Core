@@ -72,12 +72,33 @@ JWT_SECRET=your-generated-secret-here
 npx prisma migrate dev
 ```
 
-5. Start the development server:
+5. Seed the database with initial admin user (optional but recommended):
+```bash
+npm run seed
+```
+
+This will create:
+- Initial admin user (email: `admin@school.local`, password: `Admin123!@#`)
+- Default department and role
+- All system permissions
+
+**Important**: Change the admin password after first login!
+
+You can customize the seed data by setting environment variables:
+- `ADMIN_EMAIL` - Admin email (default: `admin@school.local`)
+- `ADMIN_PASSWORD` - Admin password (default: `Admin123!@#`)
+- `ADMIN_NAME` - Admin name (default: `System Administrator`)
+- `DEFAULT_DEPARTMENT_NAME` - Default department name
+- `DEFAULT_ROLE_NAME` - Default role name
+
+6. Start the development server:
 ```bash
 npm run dev
 ```
 
 The backend will run on `http://localhost:3000`
+
+**Auto-seeding**: If you set `AUTO_SEED=true` in your `.env` file, the server will automatically seed the database on startup if it's empty (development only).
 
 ### Frontend Setup
 
@@ -145,6 +166,7 @@ School-Admissions-Core/
 - [Security Assessment](./docs/security/SECURITY_ASSESSMENT.md) - הערכת אבטחה
 - [How to Check Admin](./docs/guides/HOW_TO_CHECK_ADMIN.md) - איך לבדוק אם משתמש הוא admin
 - [Large File Uploads](./docs/guides/LARGE_FILE_UPLOADS.md) - העלאת קבצים גדולים
+- [Database Seeding](./docs/guides/DATABASE_SEEDING.md) - מדריך ליצירת משתמש אדמין ראשוני
 
 ## API Endpoints
 

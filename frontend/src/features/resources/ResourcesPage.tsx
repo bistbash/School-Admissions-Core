@@ -8,6 +8,8 @@ import { apiClient } from '../../shared/lib/api';
 import { useAuth } from '../auth/AuthContext';
 import { cn } from '../../shared/lib/utils';
 import { PermissionManagerModal } from './PermissionManagerModal';
+import { PageWrapper } from '../../shared/components/PageWrapper';
+import { usePageMode } from '../permissions/PageModeContext';
 
 type Tab = 'users' | 'departments' | 'rooms' | 'roles';
 
@@ -69,16 +71,17 @@ export function ResourcesPage() {
   };
 
   return (
-    <div className="space-y-12 animate-in max-w-6xl mx-auto">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-medium tracking-tight text-black dark:text-white">
-          ניהול משאבים
-        </h1>
-        <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-          ניהול משתמשים, מחלקות, חדרים ותפקידים במערכת
-        </p>
-      </div>
+    <PageWrapper>
+      <div className="space-y-12 animate-in max-w-6xl mx-auto">
+        {/* Header */}
+        <div>
+          <h1 className="text-2xl font-medium tracking-tight text-black dark:text-white">
+            ניהול משאבים
+          </h1>
+          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+            ניהול משתמשים, מחלקות, חדרים ותפקידים במערכת
+          </p>
+        </div>
 
       {/* Tabs */}
       <div className="border-b border-gray-100 dark:border-[#1F1F1F]">
@@ -101,17 +104,19 @@ export function ResourcesPage() {
         </nav>
       </div>
 
-      {/* Tab Content */}
-      <div className="animate-slide-up">
-        {renderTabContent()}
+        {/* Tab Content */}
+        <div className="animate-slide-up">
+          {renderTabContent()}
+        </div>
       </div>
-    </div>
+    </PageWrapper>
   );
 }
 
 // Users Tab Component
 function UsersTab({ action }: { action?: string | null }) {
   const { user: currentUser } = useAuth();
+  const { mode } = usePageMode();
   
   if (!currentUser) {
     return (
@@ -319,7 +324,7 @@ function UsersTab({ action }: { action?: string | null }) {
   return (
     <div className="space-y-6">
       {/* Create User Form */}
-      {showCreateForm && currentUser?.isAdmin && (
+      {showCreateForm && currentUser?.isAdmin && mode === 'edit' && (
         <Card variant="default" className="animate-slide-up">
           <CardHeader>
             <CardTitle>צור משתמש חדש</CardTitle>
@@ -749,7 +754,7 @@ function UsersTab({ action }: { action?: string | null }) {
                   className="pr-9"
                 />
               </div>
-              {currentUser?.isAdmin && (
+              {currentUser?.isAdmin && mode === 'edit' && (
                 <Button onClick={() => setShowCreateForm(!showCreateForm)}>
                   <Plus className="h-4 w-4" />
                   משתמש חדש
@@ -788,41 +793,49 @@ function UsersTab({ action }: { action?: string | null }) {
                   </div>
                   {currentUser?.isAdmin && (
                     <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setSelectedUserForPermissions(user);
-                          setPermissionManagerOpen(true);
-                        }}
-                        className="text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300"
-                        title="נהל הרשאות"
-                      >
-                        <Shield className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleEditUser(user)}
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setShowResetPassword(user.id)}
-                        className="text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300"
-                      >
-                        <KeyRound className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        onClick={() => handleDeleteUser(user.id, user.email)}
-                        className="bg-red-600 hover:bg-red-700"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      {/* Prevent admin from editing their own permissions - only show in edit mode */}
+                      {mode === 'edit' && currentUser.id !== user.id && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setSelectedUserForPermissions(user);
+                            setPermissionManagerOpen(true);
+                          }}
+                          className="text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300"
+                          title="נהל הרשאות"
+                        >
+                          <Shield className="h-4 w-4" />
+                        </Button>
+                      )}
+                      {/* Prevent admin from editing/deleting themselves - they can do it from user settings */}
+                      {mode === 'edit' && currentUser.id !== user.id && (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleEditUser(user)}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setShowResetPassword(user.id)}
+                            className="text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300"
+                          >
+                            <KeyRound className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => handleDeleteUser(user.id, user.email)}
+                            className="bg-red-600 hover:bg-red-700"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
@@ -859,6 +872,7 @@ function DepartmentsTab({ action }: { action?: string | null }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const { user } = useAuth();
+  const { mode } = usePageMode();
 
   if (!user) {
     return (
@@ -936,7 +950,7 @@ function DepartmentsTab({ action }: { action?: string | null }) {
 
   return (
     <div className="space-y-6">
-      {showCreateForm && (
+      {showCreateForm && mode === 'edit' && (
         <Card variant="default" className="animate-slide-up">
           <CardHeader>
             <CardTitle>{editingId ? 'ערוך מחלקה' : 'צור מחלקה חדשה'}</CardTitle>
@@ -994,7 +1008,7 @@ function DepartmentsTab({ action }: { action?: string | null }) {
                   className="pr-9"
                 />
               </div>
-              {user?.isAdmin && (
+              {user?.isAdmin && mode === 'edit' && (
                 <Button onClick={() => setShowCreateForm(true)}>
                   <Plus className="h-4 w-4" />
                   מחלקה חדשה
@@ -1023,7 +1037,7 @@ function DepartmentsTab({ action }: { action?: string | null }) {
                       {dept.soldiers?.length || 0} משתמשים
                     </div>
                   </div>
-                  {user?.isAdmin && (
+                  {user?.isAdmin && mode === 'edit' && (
                     <div className="flex gap-2">
                       <Button
                         size="sm"
@@ -1064,6 +1078,7 @@ function RoomsTab({ action }: { action?: string | null }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const { user } = useAuth();
+  const { mode } = usePageMode();
 
   if (!user) {
     return (
@@ -1157,7 +1172,7 @@ function RoomsTab({ action }: { action?: string | null }) {
 
   return (
     <div className="space-y-6">
-      {showCreateForm && (
+      {showCreateForm && mode === 'edit' && (
         <Card variant="default" className="animate-slide-up">
           <CardHeader>
             <CardTitle>{editingId ? 'ערוך חדר' : 'צור חדר חדש'}</CardTitle>
@@ -1228,7 +1243,7 @@ function RoomsTab({ action }: { action?: string | null }) {
                   className="pr-9"
                 />
               </div>
-              {user?.isAdmin && (
+              {user?.isAdmin && mode === 'edit' && (
                 <Button onClick={() => setShowCreateForm(true)}>
                   <Plus className="h-4 w-4" />
                   חדר חדש
@@ -1257,7 +1272,7 @@ function RoomsTab({ action }: { action?: string | null }) {
                       קיבולת: {room.capacity} תלמידים
                     </div>
                   </div>
-                  {user?.isAdmin && (
+                  {user?.isAdmin && mode === 'edit' && (
                     <div className="flex gap-2">
                       <Button
                         size="sm"
@@ -1297,6 +1312,7 @@ function RolesTab({ action }: { action?: string | null }) {
   const [permissionManagerOpen, setPermissionManagerOpen] = useState(false);
   const [selectedRoleForPermissions, setSelectedRoleForPermissions] = useState<any | null>(null);
   const { user } = useAuth();
+  const { mode } = usePageMode();
 
   if (!user) {
     return (
@@ -1374,7 +1390,7 @@ function RolesTab({ action }: { action?: string | null }) {
 
   return (
     <div className="space-y-6">
-      {showCreateForm && (
+      {showCreateForm && mode === 'edit' && (
         <Card variant="default" className="animate-slide-up">
           <CardHeader>
             <CardTitle>{editingId ? 'ערוך תפקיד' : 'צור תפקיד חדש'}</CardTitle>
@@ -1432,7 +1448,7 @@ function RolesTab({ action }: { action?: string | null }) {
                   className="pr-9"
                 />
               </div>
-              {user?.isAdmin && (
+              {user?.isAdmin && mode === 'edit' && (
                 <Button onClick={() => setShowCreateForm(true)}>
                   <Plus className="h-4 w-4" />
                   תפקיד חדש
@@ -1463,32 +1479,39 @@ function RolesTab({ action }: { action?: string | null }) {
                   </div>
                   {user?.isAdmin && (
                     <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setSelectedRoleForPermissions(role);
-                          setPermissionManagerOpen(true);
-                        }}
-                        className="text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300"
-                        title="נהל הרשאות"
-                      >
-                        <Shield className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleEdit(role)}
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        onClick={() => handleDelete(role.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      {/* Only show permission management button in edit mode */}
+                      {mode === 'edit' && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setSelectedRoleForPermissions(role);
+                            setPermissionManagerOpen(true);
+                          }}
+                          className="text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300"
+                          title="נהל הרשאות"
+                        >
+                          <Shield className="h-4 w-4" />
+                        </Button>
+                      )}
+                      {mode === 'edit' && (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleEdit(role)}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => handleDelete(role.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>

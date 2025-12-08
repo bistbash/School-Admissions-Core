@@ -220,6 +220,7 @@ export class PermissionsController {
 
   /**
    * Grant page permission to user (Admin only)
+   * Prevents admin from editing their own permissions
    */
   async grantPagePermission(req: Request, res: Response, next: NextFunction) {
     try {
@@ -233,6 +234,11 @@ export class PermissionsController {
 
       if (!['view', 'edit'].includes(action)) {
         return res.status(400).json({ error: 'Action must be "view" or "edit"' });
+      }
+
+      // Prevent admin from editing their own permissions
+      if (adminUser.userId === userId) {
+        return res.status(403).json({ error: 'Cannot edit your own permissions' });
       }
 
       const result = await permissionsService.grantPagePermission(
@@ -271,6 +277,7 @@ export class PermissionsController {
 
   /**
    * Revoke page permission from user (Admin only)
+   * Prevents admin from editing their own permissions
    */
   async revokePagePermission(req: Request, res: Response, next: NextFunction) {
     try {
@@ -284,6 +291,11 @@ export class PermissionsController {
 
       if (!['view', 'edit'].includes(action)) {
         return res.status(400).json({ error: 'Action must be "view" or "edit"' });
+      }
+
+      // Prevent admin from editing their own permissions
+      if (adminUser.userId === userId) {
+        return res.status(403).json({ error: 'Cannot edit your own permissions' });
       }
 
       const result = await permissionsService.revokePagePermission(userId, page, action);
@@ -360,6 +372,312 @@ export class PermissionsController {
           action: 'grant_page_permission_to_role',
           roleId: req.params.roleId,
         },
+      });
+      next(error);
+    }
+  }
+
+  /**
+   * Revoke page permission from role (Admin only)
+   */
+  async revokePagePermissionFromRole(req: Request, res: Response, next: NextFunction) {
+    try {
+      const adminUser = (req as any).user;
+      const roleId = parseInt(req.params.roleId);
+      const { page, action } = req.body;
+
+      if (!page || !action) {
+        return res.status(400).json({ error: 'Page and action are required' });
+      }
+
+      if (!['view', 'edit'].includes(action)) {
+        return res.status(400).json({ error: 'Action must be "view" or "edit"' });
+      }
+
+      const result = await permissionsService.revokePagePermissionFromRole(roleId, page, action);
+
+      await auditFromRequest(req, 'UPDATE', 'PERMISSION', {
+        status: 'SUCCESS',
+        details: {
+          action: 'revoke_page_permission_from_role',
+          roleId,
+          page,
+          permissionAction: action,
+          revokedBy: adminUser.userId,
+          apiPermissionsRevoked: result.apiPermissions,
+        },
+      });
+
+      res.json(result);
+    } catch (error) {
+      await auditFromRequest(req, 'UPDATE', 'PERMISSION', {
+        status: 'FAILURE',
+        errorMessage: error instanceof Error ? error.message : 'Failed to revoke page permission from role',
+        details: {
+          action: 'revoke_page_permission_from_role',
+          roleId: req.params.roleId,
+        },
+      });
+      next(error);
+    }
+  }
+
+  /**
+   * Get role's page permissions (Admin only)
+   */
+  async getRolePagePermissions(req: Request, res: Response, next: NextFunction) {
+    try {
+      const roleId = parseInt(req.params.roleId);
+      const pagePermissions = await permissionsService.getRolePagePermissions(roleId);
+      res.json(pagePermissions);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Bulk grant page permissions to user (Admin only)
+   */
+  async bulkGrantPagePermissionsToUser(req: Request, res: Response, next: NextFunction) {
+    try {
+      const adminUser = (req as any).user;
+      const userId = parseInt(req.params.userId);
+      const { permissions } = req.body;
+
+      if (!Array.isArray(permissions)) {
+        return res.status(400).json({ error: 'Permissions must be an array' });
+      }
+
+      const results = await permissionsService.bulkGrantPagePermissionsToUser(
+        userId,
+        permissions,
+        adminUser.userId
+      );
+
+      await auditFromRequest(req, 'UPDATE', 'PERMISSION', {
+        status: 'SUCCESS',
+        details: {
+          action: 'bulk_grant_page_permissions_to_user',
+          userId,
+          permissionsCount: permissions.length,
+          grantedBy: adminUser.userId,
+        },
+      });
+
+      res.json(results);
+    } catch (error) {
+      await auditFromRequest(req, 'UPDATE', 'PERMISSION', {
+        status: 'FAILURE',
+        errorMessage: error instanceof Error ? error.message : 'Failed to bulk grant page permissions',
+        details: {
+          action: 'bulk_grant_page_permissions_to_user',
+          userId: req.params.userId,
+        },
+      });
+      next(error);
+    }
+  }
+
+  /**
+   * Bulk grant page permissions to role (Admin only)
+   */
+  async bulkGrantPagePermissionsToRole(req: Request, res: Response, next: NextFunction) {
+    try {
+      const adminUser = (req as any).user;
+      const roleId = parseInt(req.params.roleId);
+      const { permissions } = req.body;
+
+      if (!Array.isArray(permissions)) {
+        return res.status(400).json({ error: 'Permissions must be an array' });
+      }
+
+      const results = await permissionsService.bulkGrantPagePermissionsToRole(
+        roleId,
+        permissions,
+        adminUser.userId
+      );
+
+      await auditFromRequest(req, 'UPDATE', 'PERMISSION', {
+        status: 'SUCCESS',
+        details: {
+          action: 'bulk_grant_page_permissions_to_role',
+          roleId,
+          permissionsCount: permissions.length,
+          grantedBy: adminUser.userId,
+        },
+      });
+
+      res.json(results);
+    } catch (error) {
+      await auditFromRequest(req, 'UPDATE', 'PERMISSION', {
+        status: 'FAILURE',
+        errorMessage: error instanceof Error ? error.message : 'Failed to bulk grant page permissions to role',
+        details: {
+          action: 'bulk_grant_page_permissions_to_role',
+          roleId: req.params.roleId,
+        },
+      });
+      next(error);
+    }
+  }
+
+  /**
+   * Grant custom view mode permission to user (Admin only)
+   */
+  async grantCustomModePermission(req: Request, res: Response, next: NextFunction) {
+    try {
+      const adminUser = (req as any).user;
+      const userId = parseInt(req.params.userId);
+      const { page, modeId } = req.body;
+
+      if (!page || !modeId) {
+        return res.status(400).json({ error: 'Page and modeId are required' });
+      }
+
+      // Prevent admin from editing their own permissions
+      if (adminUser.userId === userId) {
+        return res.status(403).json({ error: 'Cannot edit your own permissions' });
+      }
+
+      const result = await permissionsService.grantCustomModePermission(
+        userId,
+        page,
+        modeId,
+        adminUser.userId
+      );
+
+      await auditFromRequest(req, 'UPDATE', 'PERMISSION', {
+        status: 'SUCCESS',
+        details: {
+          action: 'grant_custom_mode_permission',
+          userId,
+          page,
+          modeId,
+          grantedBy: adminUser.userId,
+        },
+      });
+
+      res.json(result);
+    } catch (error) {
+      await auditFromRequest(req, 'UPDATE', 'PERMISSION', {
+        status: 'FAILURE',
+        errorMessage: error instanceof Error ? error.message : 'Failed to grant custom mode permission',
+      });
+      next(error);
+    }
+  }
+
+  /**
+   * Revoke custom view mode permission from user (Admin only)
+   */
+  async revokeCustomModePermission(req: Request, res: Response, next: NextFunction) {
+    try {
+      const adminUser = (req as any).user;
+      const userId = parseInt(req.params.userId);
+      const { page, modeId } = req.body;
+
+      if (!page || !modeId) {
+        return res.status(400).json({ error: 'Page and modeId are required' });
+      }
+
+      // Prevent admin from editing their own permissions
+      if (adminUser.userId === userId) {
+        return res.status(403).json({ error: 'Cannot edit your own permissions' });
+      }
+
+      const result = await permissionsService.revokeCustomModePermission(userId, page, modeId);
+
+      await auditFromRequest(req, 'UPDATE', 'PERMISSION', {
+        status: 'SUCCESS',
+        details: {
+          action: 'revoke_custom_mode_permission',
+          userId,
+          page,
+          modeId,
+        },
+      });
+
+      res.json(result);
+    } catch (error) {
+      await auditFromRequest(req, 'UPDATE', 'PERMISSION', {
+        status: 'FAILURE',
+        errorMessage: error instanceof Error ? error.message : 'Failed to revoke custom mode permission',
+      });
+      next(error);
+    }
+  }
+
+  /**
+   * Grant custom view mode permission to role (Admin only)
+   */
+  async grantCustomModePermissionToRole(req: Request, res: Response, next: NextFunction) {
+    try {
+      const adminUser = (req as any).user;
+      const roleId = parseInt(req.params.roleId);
+      const { page, modeId } = req.body;
+
+      if (!page || !modeId) {
+        return res.status(400).json({ error: 'Page and modeId are required' });
+      }
+
+      const result = await permissionsService.grantCustomModePermissionToRole(
+        roleId,
+        page,
+        modeId,
+        adminUser.userId
+      );
+
+      await auditFromRequest(req, 'UPDATE', 'PERMISSION', {
+        status: 'SUCCESS',
+        details: {
+          action: 'grant_custom_mode_permission_to_role',
+          roleId,
+          page,
+          modeId,
+          grantedBy: adminUser.userId,
+        },
+      });
+
+      res.json(result);
+    } catch (error) {
+      await auditFromRequest(req, 'UPDATE', 'PERMISSION', {
+        status: 'FAILURE',
+        errorMessage: error instanceof Error ? error.message : 'Failed to grant custom mode permission to role',
+      });
+      next(error);
+    }
+  }
+
+  /**
+   * Revoke custom view mode permission from role (Admin only)
+   */
+  async revokeCustomModePermissionFromRole(req: Request, res: Response, next: NextFunction) {
+    try {
+      const adminUser = (req as any).user;
+      const roleId = parseInt(req.params.roleId);
+      const { page, modeId } = req.body;
+
+      if (!page || !modeId) {
+        return res.status(400).json({ error: 'Page and modeId are required' });
+      }
+
+      const result = await permissionsService.revokeCustomModePermissionFromRole(roleId, page, modeId);
+
+      await auditFromRequest(req, 'UPDATE', 'PERMISSION', {
+        status: 'SUCCESS',
+        details: {
+          action: 'revoke_custom_mode_permission_from_role',
+          roleId,
+          page,
+          modeId,
+        },
+      });
+
+      res.json(result);
+    } catch (error) {
+      await auditFromRequest(req, 'UPDATE', 'PERMISSION', {
+        status: 'FAILURE',
+        errorMessage: error instanceof Error ? error.message : 'Failed to revoke custom mode permission from role',
       });
       next(error);
     }

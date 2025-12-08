@@ -76,14 +76,17 @@ export class TracksController {
   }
 
   /**
-   * Delete track (soft delete)
+   * Delete track (hard delete for inactive tracks only)
    * DELETE /api/tracks/:id
    */
   async delete(req: Request, res: Response, next: NextFunction) {
     try {
       const id = Number(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: 'Invalid track ID' });
+      }
       const result = await tracksService.delete(id);
-      res.json(result);
+      res.json({ success: true, track: result });
     } catch (error) {
       next(error);
     }

@@ -14,27 +14,22 @@ interface PermissionGuardProps {
 }
 
 /**
- * Component that conditionally renders children based on user permissions
- * Usage:
- * <PermissionGuard permission="students.read">
- *   <StudentsList />
- * </PermissionGuard>
+ * Component that conditionally renders children based on page permissions
  * 
- * Or with resource/action:
- * <PermissionGuard resource="students" action="read">
+ * Now only supports page permissions - the system works exclusively with page permissions
+ * 
+ * Usage:
+ * <PermissionGuard page="students" pageAction="view">
  *   <StudentsList />
  * </PermissionGuard>
  */
 export function PermissionGuard({ 
-  permission, 
-  resource, 
-  action, 
   page,
   pageAction,
   fallback = null, 
   children 
 }: PermissionGuardProps) {
-  const { hasPermission, hasResourcePermission, hasPagePermission, isLoading } = usePermissions();
+  const { hasPagePermission, isLoading } = usePermissions();
   const { user } = useAuth();
 
   // Show loading state while permissions are loading
@@ -51,18 +46,14 @@ export function PermissionGuard({
     return <>{children}</>;
   }
 
-  let hasAccess = false;
-
-  if (page && pageAction) {
-    hasAccess = hasPagePermission(page, pageAction);
-  } else if (permission) {
-    hasAccess = hasPermission(permission);
-  } else if (resource && action) {
-    hasAccess = hasResourcePermission(resource, action);
-  } else {
-    // If no permission specified, allow access
-    hasAccess = true;
+  // Page and pageAction are required
+  if (!page || !pageAction) {
+    console.error('PermissionGuard: page and pageAction are required');
+    return <>{fallback !== null ? fallback : <Error403Page />}</>;
   }
+
+  // Check page permission
+  const hasAccess = hasPagePermission(page, pageAction);
 
   if (!hasAccess) {
     // Use Error403Page as default fallback if none provided

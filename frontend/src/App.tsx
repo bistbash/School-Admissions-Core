@@ -3,12 +3,12 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider } from './shared/components/ThemeContext';
 import { AuthProvider, useAuth } from './features/auth/AuthContext';
 import { PermissionsProvider } from './features/permissions/PermissionsContext';
+import { PageModeProvider } from './features/permissions/PageModeContext';
 import { Layout } from './shared/components/Layout';
 import { LoginPage } from './features/auth/LoginPage';
 import { CompleteProfilePage } from './features/auth/CompleteProfilePage';
 import { DashboardPage } from './features/dashboard/DashboardPage';
 import { ResourcesPage } from './features/resources/ResourcesPage';
-import { PermissionsPage } from './features/permissions/PermissionsPage';
 import { SOCPage } from './features/soc/SOCPage';
 import { APIPage } from './features/api/APIPage';
 import { StudentsPage } from './features/students/StudentsPage';
@@ -43,6 +43,13 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, isLoading, logout } = useAuth();
   const { redirectToLogin } = useRedirect();
 
+  // Handle redirect to login when user is not authenticated
+  React.useEffect(() => {
+    if (!isLoading && !user) {
+      redirectToLogin();
+    }
+  }, [isLoading, user, redirectToLogin]);
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -52,9 +59,8 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }
 
   if (!user) {
-    // Save current location before redirecting to login
-    redirectToLogin();
-    return null; // Return null while redirecting
+    // Return null while redirecting
+    return null;
   }
 
   // Block pending users - they have the same access as outsiders
@@ -149,16 +155,6 @@ function AppRoutes() {
           } 
         />
         <Route 
-          path="permissions" 
-          element={
-            <PermissionGuard page="permissions" pageAction="view" fallback={<Error403Page />}>
-              <ErrorHandler>
-                <PermissionsPage />
-              </ErrorHandler>
-            </PermissionGuard>
-          } 
-        />
-        <Route 
           path="soc" 
           element={
             <PermissionGuard page="soc" pageAction="view" fallback={<Error403Page />}>
@@ -188,7 +184,16 @@ function AppRoutes() {
             </PermissionGuard>
           } 
         />
-        <Route path="settings" element={<ErrorHandler><div>Settings Page - Coming Soon</div></ErrorHandler>} />
+        <Route 
+          path="settings" 
+          element={
+            <PermissionGuard page="settings" pageAction="view" fallback={<Error403Page />}>
+              <ErrorHandler>
+                <div>Settings Page - Coming Soon</div>
+              </ErrorHandler>
+            </PermissionGuard>
+          } 
+        />
       </Route>
       {/* Error pages */}
       <Route path="/error/403" element={<Error403Page />} />
@@ -205,11 +210,15 @@ function App() {
     <ThemeProvider>
       <AuthProvider>
         <ErrorHandler>
-        <PermissionsProvider>
-          <BrowserRouter>
-            <AppRoutes />
-          </BrowserRouter>
-        </PermissionsProvider>
+          <PermissionsProvider>
+            <BrowserRouter>
+              <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 dark:border-[#FAFAFA]"></div></div>}>
+                <PageModeProvider>
+                  <AppRoutes />
+                </PageModeProvider>
+              </React.Suspense>
+            </BrowserRouter>
+          </PermissionsProvider>
         </ErrorHandler>
       </AuthProvider>
     </ThemeProvider>
