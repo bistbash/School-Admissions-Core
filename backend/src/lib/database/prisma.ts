@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { PrismaClientRustPanicError } from '@prisma/client/runtime/library';
+import { logger } from '../utils/logger';
 
 // Singleton pattern for Prisma Client
 const globalForPrisma = globalThis as unknown as {
@@ -13,7 +14,7 @@ function createPrismaClient(): PrismaClient {
   // Only log queries if explicitly enabled via PRISMA_LOG_QUERIES env var
   // This reduces console noise in development
   const shouldLogQueries = process.env.PRISMA_LOG_QUERIES === 'true';
-  const logLevels = shouldLogQueries 
+  const logLevels: Array<'query' | 'info' | 'warn' | 'error'> = shouldLogQueries 
     ? ['query', 'error', 'warn'] 
     : process.env.NODE_ENV === 'development' 
       ? ['error', 'warn'] 
@@ -44,13 +45,13 @@ async function recreatePrismaClient(): Promise<PrismaClient> {
   if (globalForPrisma.prisma) {
     try {
       await globalForPrisma.prisma.$disconnect();
-    } catch (error) {
-      console.error('Error disconnecting Prisma Client:', error);
+    } catch (error: any) {
+      logger.error({ error: error?.message || 'Unknown error' }, 'Error disconnecting Prisma Client');
     }
   }
   
   globalForPrisma.prisma = createPrismaClient();
-  console.log('Prisma Client recreated after panic');
+  logger.warn('Prisma Client recreated after panic');
   return globalForPrisma.prisma;
 }
 
@@ -75,11 +76,11 @@ export async function recreatePrisma(): Promise<PrismaClient> {
 // Handle Prisma panics by recreating the client
 process.on('unhandledRejection', async (reason: any) => {
   if (reason?.name === 'PrismaClientRustPanicError' || reason instanceof PrismaClientRustPanicError) {
-    console.error('Prisma panic detected in unhandled rejection, recreating client...');
+    logger.error('Prisma panic detected in unhandled rejection, recreating client...');
     try {
       await recreatePrisma();
-    } catch (error) {
-      console.error('Failed to recreate Prisma Client:', error);
+    } catch (error: any) {
+      logger.error({ error: error.message }, 'Failed to recreate Prisma Client');
     }
   }
 });

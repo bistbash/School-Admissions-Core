@@ -427,7 +427,7 @@ export class SOCService {
    * Block an IP address
    */
   async blockIP(ipAddress: string, reason?: string, blockedBy?: number, expiresAt?: Date) {
-    const { blockIP } = await import('../../lib/ipBlocking');
+    const { blockIP } = await import('../../lib/security/ipBlocking');
     return blockIP(ipAddress, reason, blockedBy, expiresAt);
   }
 
@@ -435,7 +435,7 @@ export class SOCService {
    * Unblock an IP address
    */
   async unblockIP(ipAddress: string) {
-    const { unblockIP } = await import('../../lib/ipBlocking');
+    const { unblockIP } = await import('../../lib/security/ipBlocking');
     return unblockIP(ipAddress);
   }
 
@@ -443,7 +443,7 @@ export class SOCService {
    * Check if IP is blocked
    */
   async isIPBlocked(ipAddress: string) {
-    const { isIPBlocked } = await import('../../lib/ipBlocking');
+    const { isIPBlocked } = await import('../../lib/security/ipBlocking');
     return isIPBlocked(ipAddress);
   }
 
@@ -451,7 +451,7 @@ export class SOCService {
    * Get all trusted users
    */
   async getTrustedUsers() {
-    const { getTrustedUsers } = await import('../../lib/trustedUsers');
+    const { getTrustedUsers } = await import('../../lib/security/trustedUsers');
     return getTrustedUsers();
   }
 
@@ -467,7 +467,7 @@ export class SOCService {
     createdBy?: number;
     expiresAt?: Date;
   }) {
-    const { addTrustedUser } = await import('../../lib/trustedUsers');
+    const { addTrustedUser } = await import('../../lib/security/trustedUsers');
     return addTrustedUser(data);
   }
 
@@ -475,7 +475,7 @@ export class SOCService {
    * Remove a trusted user/IP
    */
   async removeTrustedUser(id: number) {
-    const { removeTrustedUser } = await import('../../lib/trustedUsers');
+    const { removeTrustedUser } = await import('../../lib/security/trustedUsers');
     return removeTrustedUser(id);
   }
 }

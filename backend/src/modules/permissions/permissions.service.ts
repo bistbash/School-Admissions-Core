@@ -151,7 +151,7 @@ export class PermissionsService {
    * hasScopedPermission(userId, permissionName)
    */
   async hasPermission(userId: number, permissionName: string): Promise<boolean> {
-    const { hasScopedPermission } = await import('../../lib/permissions');
+    const { hasScopedPermission } = await import('../../lib/permissions/permissions');
     return hasScopedPermission(userId, permissionName);
   }
 
@@ -162,7 +162,7 @@ export class PermissionsService {
    * hasScopedPermission(userId, `${resource}:${action}`)
    */
   async hasResourcePermission(userId: number, resource: string, action: string): Promise<boolean> {
-    const { hasScopedPermission } = await import('../../lib/permissions');
+    const { hasScopedPermission } = await import('../../lib/permissions/permissions');
     return hasScopedPermission(userId, `${resource}:${action}`);
   }
 
@@ -183,14 +183,6 @@ export class PermissionsService {
 
     if (user.approvalStatus !== 'APPROVED') {
       throw new ValidationError(`Cannot grant permissions to user with status "${user.approvalStatus}". Only APPROVED users can receive permissions.`);
-    }
-    // Verify user exists
-    const user = await prisma.soldier.findUnique({
-      where: { id: userId },
-    });
-
-    if (!user) {
-      throw new NotFoundError('User');
     }
 
     // Verify permission exists

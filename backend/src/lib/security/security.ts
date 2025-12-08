@@ -74,7 +74,7 @@ export async function requireAPIKey(req: Request, res: Response, next: NextFunct
 
     // Fall back to JWT token (for authenticated frontend users)
     if (authHeader && authHeader.startsWith('Bearer ')) {
-      const { verifyToken } = await import('./auth');
+      const { verifyToken } = await import('../auth/auth');
       try {
         const token = authHeader.substring(7);
         const payload = verifyToken(token);

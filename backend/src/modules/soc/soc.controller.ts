@@ -162,7 +162,7 @@ export class SOCController {
       const update: IncidentUpdate = req.body;
       
       // Get the incident before update to track resolution time
-      const { prisma } = await import('../../lib/prisma');
+      const { prisma } = await import('../../lib/database/prisma');
       const beforeUpdate = await prisma.auditLog.findUnique({
         where: { id: logId },
         select: { createdAt: true, incidentStatus: true },
@@ -531,7 +531,7 @@ export class SOCController {
     const correlationId = getCorrelationId();
     
     try {
-      const { getSOCMetrics } = await import('../../lib/soc-metrics');
+      const { getSOCMetrics } = await import('../../lib/soc/soc-metrics');
       const metrics = await getSOCMetrics();
 
       logger.info({

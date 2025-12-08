@@ -147,7 +147,7 @@ export async function apiKeyAuth(req: Request, res: Response, next: NextFunction
     const isValid = await verifyAPIKey(apiKey);
     if (!isValid) {
       // Log failed attempt (without the key itself)
-      const { auditFromRequest } = await import('./audit');
+      const { auditFromRequest } = await import('../audit/audit');
       await auditFromRequest(req, 'AUTH_FAILED', 'AUTH', {
         status: 'FAILURE',
         errorMessage: 'Invalid or expired API key',
@@ -170,7 +170,7 @@ export async function apiKeyAuth(req: Request, res: Response, next: NextFunction
       };
       
       // Log successful API key usage (without the key itself)
-      const { auditFromRequest } = await import('./audit');
+      const { auditFromRequest } = await import('../audit/audit');
       await auditFromRequest(req, 'READ', 'AUTH', {
         status: 'SUCCESS',
         details: {

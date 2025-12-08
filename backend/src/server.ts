@@ -35,7 +35,7 @@ dotenv.config();
 try {
   validateEnv();
 } catch (error: any) {
-  console.error('Failed to validate environment variables:', error.message);
+  logger.error({ error: error.message }, 'Failed to validate environment variables');
   process.exit(1);
 }
 

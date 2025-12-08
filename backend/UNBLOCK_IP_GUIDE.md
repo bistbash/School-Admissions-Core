@@ -80,3 +80,4 @@ To prevent this in the future:
 - Trusted users are never blocked
 - The system checks `isActive = true` AND `expiresAt` (if set)
 - Setting `isActive = false` immediately unblocks the IP
+

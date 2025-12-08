@@ -135,7 +135,7 @@ export class StudentsUploadController {
       let isAdmin = false;
       if (user?.userId) {
         try {
-          const { prisma } = await import('../../lib/prisma');
+          const { prisma } = await import('../../lib/database/prisma');
           const soldier = await prisma.soldier.findUnique({
             where: { id: user.userId },
           }) as any;

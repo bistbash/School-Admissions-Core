@@ -77,7 +77,7 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
 
     // Try API key first
     if (apiKey) {
-      const { verifyAPIKey, getAPIKeyInfo } = await import('./apiKeys');
+      const { verifyAPIKey, getAPIKeyInfo } = await import('../api-keys/apiKeys');
       const isValid = await verifyAPIKey(apiKey);
       
       if (isValid) {

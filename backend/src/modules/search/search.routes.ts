@@ -13,3 +13,4 @@ router.get('/pages/search', searchController.searchPages.bind(searchController))
 router.get('/pages/categories', searchController.getPagesByCategory.bind(searchController));
 
 export default router;
+

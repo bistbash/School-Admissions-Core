@@ -1,5 +1,7 @@
 import { prisma } from '../../lib/database/prisma';
 import { NotFoundError, ValidationError } from '../../lib/utils/errors';
+import { logger } from '../../lib/utils/logger';
+import { PrismaClient } from '@prisma/client';
 
 export interface CreateStudentData {
   idNumber: string;
@@ -84,16 +86,21 @@ export class StudentsService {
 
   /**
    * Find or create a Class record for the given grade/parallel/track combination
+   * @param tx - Optional transaction client. If provided, all operations use the transaction.
+   *             If not provided, uses the global prisma client.
    */
   private async findOrCreateClass(
     grade: string,
     parallel: string | undefined,
     track: string | undefined,
-    academicYear: number
+    academicYear: number,
+    tx?: Parameters<Parameters<typeof prisma.$transaction>[0]>[0]
   ) {
+    const client = tx || prisma;
+    
     // When track or parallel is null, we can't use findUnique with the composite key
     // Use findFirst instead to handle null values properly
-    const existingClass = await prisma.class.findFirst({
+    const existingClass = await client.class.findFirst({
       where: {
         grade,
         parallel: parallel || null,
@@ -108,7 +115,7 @@ export class StudentsService {
 
     // Create new class if it doesn't exist
     const className = [grade, parallel, track].filter(Boolean).join(' - ') || grade;
-    return prisma.class.create({
+    return client.class.create({
       data: {
         grade,
         parallel: parallel || null,
@@ -160,98 +167,108 @@ export class StudentsService {
 
   /**
    * Create a new student
+   * Uses transaction to ensure atomicity of student and enrollment creation
    */
   async create(data: CreateStudentData) {
-    // Check if ID number already exists
-    const existing = await prisma.student.findUnique({
-      where: { idNumber: data.idNumber },
-    });
+    return prisma.$transaction(async (tx) => {
+      // Check if ID number already exists
+      const existing = await tx.student.findUnique({
+        where: { idNumber: data.idNumber },
+      });
 
-    if (existing) {
-      throw new ValidationError('Student with this ID number already exists');
-    }
+      if (existing) {
+        throw new ValidationError('Student with this ID number already exists');
+      }
 
-    // Verify cohort exists
-    const cohort = await prisma.cohort.findUnique({
-      where: { id: data.cohortId },
-    });
+      // Verify cohort exists
+      const cohort = await tx.cohort.findUnique({
+        where: { id: data.cohortId },
+      });
 
-    if (!cohort) {
-      throw new NotFoundError('Cohort');
-    }
+      if (!cohort) {
+        throw new NotFoundError('Cohort');
+      }
 
-    const academicYear = data.academicYear || this.getCurrentAcademicYear();
+      const academicYear = data.academicYear || this.getCurrentAcademicYear();
 
-    // Create student
-    const student = await prisma.student.create({
-      data: {
-        idNumber: data.idNumber,
-        firstName: data.firstName,
-        lastName: data.lastName,
-        gender: data.gender,
-        // Keep deprecated fields for backward compatibility during migration
-        grade: data.grade,
-        parallel: data.parallel,
-        track: data.track,
-        cohortId: data.cohortId,
-        studyStartDate: data.studyStartDate instanceof Date ? data.studyStartDate : new Date(data.studyStartDate),
-        status: 'ACTIVE',
-        // Additional fields
-        dateOfBirth: data.dateOfBirth,
-        email: data.email,
-        aliyahDate: data.aliyahDate,
-        locality: data.locality,
-        address: data.address,
-        address2: data.address2,
-        locality2: data.locality2,
-        phone: data.phone,
-        mobilePhone: data.mobilePhone,
-        parent1IdNumber: data.parent1IdNumber,
-        parent1FirstName: data.parent1FirstName,
-        parent1LastName: data.parent1LastName,
-        parent1Type: data.parent1Type,
-        parent1Mobile: data.parent1Mobile,
-        parent1Email: data.parent1Email,
-        parent2IdNumber: data.parent2IdNumber,
-        parent2FirstName: data.parent2FirstName,
-        parent2LastName: data.parent2LastName,
-        parent2Type: data.parent2Type,
-        parent2Mobile: data.parent2Mobile,
-        parent2Email: data.parent2Email,
-      },
-    });
+      // Create student
+      const student = await tx.student.create({
+        data: {
+          idNumber: data.idNumber,
+          firstName: data.firstName,
+          lastName: data.lastName,
+          gender: data.gender,
+          // Keep deprecated fields for backward compatibility during migration
+          grade: data.grade,
+          parallel: data.parallel,
+          track: data.track,
+          cohortId: data.cohortId,
+          studyStartDate: data.studyStartDate instanceof Date ? data.studyStartDate : new Date(data.studyStartDate),
+          status: 'ACTIVE',
+          // Additional fields
+          dateOfBirth: data.dateOfBirth,
+          email: data.email,
+          aliyahDate: data.aliyahDate,
+          locality: data.locality,
+          address: data.address,
+          address2: data.address2,
+          locality2: data.locality2,
+          phone: data.phone,
+          mobilePhone: data.mobilePhone,
+          parent1IdNumber: data.parent1IdNumber,
+          parent1FirstName: data.parent1FirstName,
+          parent1LastName: data.parent1LastName,
+          parent1Type: data.parent1Type,
+          parent1Mobile: data.parent1Mobile,
+          parent1Email: data.parent1Email,
+          parent2IdNumber: data.parent2IdNumber,
+          parent2FirstName: data.parent2FirstName,
+          parent2LastName: data.parent2LastName,
+          parent2Type: data.parent2Type,
+          parent2Mobile: data.parent2Mobile,
+          parent2Email: data.parent2Email,
+        },
+      });
 
-    // Create enrollment record
-    const classRecord = await this.findOrCreateClass(
-      data.grade,
-      data.parallel,
-      data.track,
-      academicYear
-    );
+      // Create enrollment record atomically
+      const classRecord = await this.findOrCreateClass(
+        data.grade,
+        data.parallel,
+        data.track,
+        academicYear,
+        tx
+      );
 
-    await prisma.enrollment.create({
-      data: {
+      await tx.enrollment.create({
+        data: {
+          studentId: student.id,
+          classId: classRecord.id,
+          enrollmentDate: new Date(),
+        },
+      });
+
+      logger.info({
         studentId: student.id,
-        classId: classRecord.id,
-        enrollmentDate: new Date(),
-      },
-    });
+        idNumber: data.idNumber,
+        cohortId: data.cohortId,
+      }, 'Student created with enrollment');
 
-    // Return student with enrollment data
-    return prisma.student.findUnique({
-      where: { id: student.id },
-      include: {
-        cohort: true,
-        exitRecord: true,
-        enrollments: {
-          include: {
-            class: true,
-          },
-          orderBy: {
-            enrollmentDate: 'desc',
+      // Return student with enrollment data
+      return tx.student.findUnique({
+        where: { id: student.id },
+        include: {
+          cohort: true,
+          exitRecord: true,
+          enrollments: {
+            include: {
+              class: true,
+            },
+            orderBy: {
+              enrollmentDate: 'desc',
+            },
           },
         },
-      },
+      });
     });
   }
 
@@ -338,7 +355,7 @@ export class StudentsService {
    * Uses separate queries to avoid complex nested queries that cause Prisma panics
    */
   async getById(id: number, includeHistory: boolean = true) {
-    const { retryPrismaOperation } = await import('../../lib/prisma-retry');
+    const { retryPrismaOperation } = await import('../../lib/database/prisma-retry');
     
     return retryPrismaOperation(async () => {
       // Fetch student with basic includes first (simpler query)
@@ -400,7 +417,7 @@ export class StudentsService {
    * Uses separate queries to avoid complex nested queries
    */
   async getByIdNumber(idNumber: string) {
-    const { retryPrismaOperation } = await import('../../lib/prisma-retry');
+    const { retryPrismaOperation } = await import('../../lib/database/prisma-retry');
     
     return retryPrismaOperation(async () => {
       // Fetch student with basic includes first (simpler query)
@@ -762,7 +779,7 @@ export class StudentsService {
           .slice(0, 1),
       }));
 
-      console.log(`Found ${studentsWithPreviousEnrollment.length} active students to process`);
+      logger.info({ count: studentsWithPreviousEnrollment.length }, 'Processing students for promotion');
 
       // Process each student individually based on their current enrollment
       for (const student of studentsWithPreviousEnrollment) {
@@ -770,7 +787,7 @@ export class StudentsService {
           const currentEnrollment = student.enrollments?.[0];
           if (!currentEnrollment) {
             // No enrollment found for previous year - skip
-            console.log(`Skipping student ${student.id} (${student.firstName} ${student.lastName}) - no enrollment found for academic year ${previousAcademicYear}`);
+            logger.debug({ studentId: student.id, academicYear: previousAcademicYear }, 'Skipping student - no enrollment found');
             results.skipped++;
             continue;
           }
@@ -781,7 +798,7 @@ export class StudentsService {
           
           if (nextGrade === undefined) {
             // Grade not in progression (e.g., י"ג, י"ד) - skip
-            console.log(`Skipping student ${student.id} (${student.firstName} ${student.lastName}) - grade ${currentGrade} not in automatic progression`);
+            logger.debug({ studentId: student.id, grade: currentGrade }, 'Skipping student - grade not in automatic progression');
             results.skipped++;
             continue;
           }
@@ -792,7 +809,7 @@ export class StudentsService {
               where: { id: student.id },
               data: { status: 'GRADUATED' },
             });
-            console.log(`Graduated student ${student.id} (${student.firstName} ${student.lastName}) from grade ${currentGrade}`);
+            logger.info({ studentId: student.id, grade: currentGrade }, 'Student graduated');
             results.graduated++;
           } else {
             // Create new enrollment for next grade
@@ -826,11 +843,11 @@ export class StudentsService {
               where: { id: student.id },
               data: { grade: nextGrade },
             });
-            console.log(`Promoted student ${student.id} (${student.firstName} ${student.lastName}) from ${currentGrade} to ${nextGrade}`);
+            logger.info({ studentId: student.id, fromGrade: currentGrade, toGrade: nextGrade }, 'Student promoted');
             results.promoted++;
           }
         } catch (error: any) {
-          console.error(`Error promoting student ${student.id}:`, error);
+          logger.error({ studentId: student.id, error: error.message }, 'Error promoting student');
           results.errors.push({
             studentId: student.id,
             error: error.message || 'Unknown error',
@@ -900,14 +917,14 @@ export class StudentsService {
             });
           }
         } catch (error: any) {
-          console.error(`Error updating cohort ${cohort.id}:`, error);
+          logger.error({ cohortId: cohort.id, error: error.message }, 'Error updating cohort');
           results.errors.push({
             error: `Cohort ${cohort.id}: ${error.message || 'Unknown error'}`,
           });
         }
       }
     } catch (error: any) {
-      console.error('Error in promoteAllCohorts:', error);
+      logger.error({ error: error.message }, 'Error in promoteAllCohorts');
       results.errors.push({
         error: error.message || 'Unknown error',
       });
@@ -922,14 +939,14 @@ export class StudentsService {
    */
   async deleteAll() {
     try {
-      console.log('deleteAll service - starting deleteMany');
+      logger.warn('Starting deleteAll operation - this will delete all students');
       const result = await prisma.student.deleteMany({});
-      console.log(`deleteAll service - deleted ${result.count} students`);
+      logger.warn({ count: result.count }, 'deleteAll operation completed');
       return {
         deleted: result.count,
       };
     } catch (error: any) {
-      console.error('Error in deleteAll service:', error);
+      logger.error({ error: error.message }, 'Error in deleteAll service');
       throw error;
     }
   }

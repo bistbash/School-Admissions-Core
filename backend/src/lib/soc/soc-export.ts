@@ -1,12 +1,12 @@
 import { prisma } from '../database/prisma';
-import { AuditLogFilter } from '../modules/soc/soc.service';
+import { AuditLogFilter } from '../../modules/soc/soc.service';
 import { logger } from '../utils/logger';
 
 /**
  * Export audit logs to CSV format
  */
 export async function exportAuditLogsToCSV(filter: AuditLogFilter = {}): Promise<string> {
-  const { SOCService } = await import('../modules/soc/soc.service');
+  const { SOCService } = await import('../../modules/soc/soc.service');
   const socService = new SOCService();
   
   // Get all logs matching the filter (without pagination)
@@ -82,7 +82,7 @@ export async function exportAuditLogsToCSV(filter: AuditLogFilter = {}): Promise
  * Export audit logs to JSON format
  */
 export async function exportAuditLogsToJSON(filter: AuditLogFilter = {}): Promise<string> {
-  const { SOCService } = await import('../modules/soc/soc.service');
+  const { SOCService } = await import('../../modules/soc/soc.service');
   const socService = new SOCService();
   
   const result = await socService.getAuditLogs({
@@ -112,7 +112,7 @@ export async function exportStatsToJSON(
   startDate?: Date,
   endDate?: Date
 ): Promise<string> {
-  const { SOCService } = await import('../modules/soc/soc.service');
+  const { SOCService } = await import('../../modules/soc/soc.service');
   const socService = new SOCService();
   
   const stats = await socService.getAuditStats({

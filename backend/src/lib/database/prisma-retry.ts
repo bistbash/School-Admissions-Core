@@ -1,5 +1,6 @@
 import { PrismaClientRustPanicError } from '@prisma/client/runtime/library';
 import { recreatePrisma } from '../database/prisma';
+import { logger } from '../utils/logger';
 
 /**
  * Retry a Prisma operation with exponential backoff
@@ -27,16 +28,16 @@ export async function retryPrismaOperation<T>(
       if (error.name === 'PrismaClientRustPanicError' || error instanceof PrismaClientRustPanicError) {
         if (attempt < maxRetries - 1) {
           // Recreate Prisma Client on panic
-          console.warn(`Prisma panic on attempt ${attempt + 1}/${maxRetries}, recreating client...`);
+          logger.warn({ attempt: attempt + 1, maxRetries }, 'Prisma panic detected, recreating client...');
           try {
             await recreatePrisma();
-          } catch (recreateError) {
-            console.error('Failed to recreate Prisma Client:', recreateError);
+          } catch (recreateError: any) {
+            logger.error({ error: recreateError.message }, 'Failed to recreate Prisma Client');
           }
           
           // Exponential backoff: 200ms, 400ms, 800ms, etc.
           const delay = baseDelay * Math.pow(2, attempt);
-          console.warn(`Retrying in ${delay}ms...`);
+          logger.debug({ delay }, 'Retrying Prisma operation...');
           await new Promise(resolve => setTimeout(resolve, delay));
           continue;
         }

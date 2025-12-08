@@ -90,7 +90,7 @@ export class AuthService {
       });
 
       try {
-        const { addTrustedUser } = await import('../../lib/trustedUsers');
+        const { addTrustedUser } = await import('../../lib/security/trustedUsers');
         await addTrustedUser({
           userId: soldier.id,
           email: soldier.email,

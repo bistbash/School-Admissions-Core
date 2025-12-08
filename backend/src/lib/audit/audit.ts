@@ -110,7 +110,7 @@ export async function createAuditLog(data: AuditLogData): Promise<void> {
         },
       });
     }, 3, 200); // 3 retries with exponential backoff starting at 200ms
-  } catch (error) {
+  } catch (error: any) {
     // Don't throw - audit logging should never break the application
     // Only log if it's not a panic (panics are already logged by retryPrismaOperation)
     if (error?.name !== 'PrismaClientRustPanicError') {
