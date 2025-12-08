@@ -36,6 +36,11 @@ export default {
           foreground: 'hsl(var(--destructive-foreground))',
         },
         ring: 'hsl(var(--ring))',
+        // Semantic color tokens for better efficiency
+        success: 'hsl(var(--success))',
+        warning: 'hsl(var(--warning))',
+        error: 'hsl(var(--error))',
+        info: 'hsl(var(--info))',
       },
       borderRadius: {
         lg: 'var(--radius)',

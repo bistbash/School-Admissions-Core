@@ -100,7 +100,7 @@ export function PermissionsManager({ type, id, name, onClose }: PermissionsManag
     <Dialog.Root open={true} onOpenChange={(open) => !open && onClose()}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50" />
-        <Dialog.Content className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-3xl max-h-[90vh] overflow-y-auto bg-white dark:bg-[#171717] border border-gray-200 dark:border-[#333333] rounded-lg shadow-xl z-50 p-6">
+        <Dialog.Content className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-3xl max-h-[90vh] overflow-y-auto bg-white dark:bg-[#000000] border border-gray-200 dark:border-[#1F1F1F] rounded-lg shadow-xl z-50 p-6">
           <Dialog.Title className="text-xl font-semibold mb-2 text-black dark:text-white flex items-center gap-2">
             <Shield className="h-5 w-5" />
             ניהול הרשאות - {name}
@@ -113,7 +113,7 @@ export function PermissionsManager({ type, id, name, onClose }: PermissionsManag
 
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-300 dark:border-[#333333] border-t-gray-900 dark:border-t-[#FAFAFA]"></div>
+              <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-300 dark:border-[#1F1F1F] border-t-gray-900 dark:border-t-[#FAFAFA]"></div>
             </div>
           ) : (
             <div className="space-y-4">
@@ -135,7 +135,7 @@ export function PermissionsManager({ type, id, name, onClose }: PermissionsManag
                     return (
                       <div
                         key={perm.id}
-                        className="flex items-center justify-between p-3 rounded-md bg-gray-100 dark:bg-[#262626] border border-gray-200 dark:border-[#333333]"
+                        className="flex items-center justify-between p-3 rounded-md bg-gray-100 dark:bg-[#262626] border border-gray-200 dark:border-[#1F1F1F]"
                       >
                         <div className="flex-1">
                           <div className="font-medium text-black dark:text-white">{perm.name}</div>
@@ -179,7 +179,7 @@ export function PermissionsManager({ type, id, name, onClose }: PermissionsManag
             </div>
           )}
 
-          <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-gray-200 dark:border-[#333333]">
+          <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-gray-200 dark:border-[#1F1F1F]">
             <Dialog.Close asChild>
               <Button variant="outline">סגור</Button>
             </Dialog.Close>

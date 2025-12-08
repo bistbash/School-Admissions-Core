@@ -81,7 +81,7 @@ export function ResourcesPage() {
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-gray-100 dark:border-[#333333]">
+      <div className="border-b border-gray-100 dark:border-[#1F1F1F]">
         <nav className="flex gap-0.5 -mb-px">
           {tabs.map((tab) => (
             <button
@@ -311,7 +311,7 @@ function UsersTab({ action }: { action?: string | null }) {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-300 dark:border-[#333333] border-t-gray-900 dark:border-t-[#FAFAFA]"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-300 dark:border-[#1F1F1F] border-t-gray-900 dark:border-t-[#FAFAFA]"></div>
       </div>
     );
   }
@@ -383,7 +383,7 @@ function UsersTab({ action }: { action?: string | null }) {
               {pendingUsers.map((pendingUser) => (
                 <div
                   key={pendingUser.id}
-                  className="flex items-center justify-between p-4 border border-gray-200 dark:border-[#333333] rounded-lg bg-gray-50 dark:bg-[#1C1C1C]/50 hover:bg-gray-100 dark:hover:bg-[#262626] transition-colors"
+                  className="flex items-center justify-between p-4 border border-gray-200 dark:border-[#1F1F1F] rounded-lg bg-gray-50 dark:bg-[#080808]/50 hover:bg-gray-100 dark:hover:bg-[#141414] transition-colors"
                 >
                   <div className="flex-1">
                     <div className="font-semibold text-gray-900 dark:text-gray-100">
@@ -473,7 +473,7 @@ function UsersTab({ action }: { action?: string | null }) {
                   <select
                     value={editFormData.type}
                     onChange={(e) => setEditFormData({ ...editFormData, type: e.target.value })}
-                    className="w-full h-10 px-3 rounded-lg border border-gray-300 dark:border-[#333333] bg-white dark:bg-[#1C1C1C] text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-950 dark:focus:ring-gray-300 transition-all"
+                    className="w-full h-10 px-3 rounded-lg border border-gray-300 dark:border-[#1F1F1F] bg-white dark:bg-[#080808] text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-950 dark:focus:ring-gray-300 transition-all"
                   >
                     <option value="CONSCRIPT">חובה</option>
                     <option value="PERMANENT">קבע</option>
@@ -486,7 +486,7 @@ function UsersTab({ action }: { action?: string | null }) {
                   <select
                     value={editFormData.departmentId}
                     onChange={(e) => setEditFormData({ ...editFormData, departmentId: e.target.value })}
-                    className="w-full h-10 px-3 rounded-lg border border-gray-300 dark:border-[#333333] bg-white dark:bg-[#1C1C1C] text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-950 dark:focus:ring-gray-300 transition-all"
+                    className="w-full h-10 px-3 rounded-lg border border-gray-300 dark:border-[#1F1F1F] bg-white dark:bg-[#080808] text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-950 dark:focus:ring-gray-300 transition-all"
                     required
                   >
                     <option value="">בחר מחלקה</option>
@@ -506,7 +506,7 @@ function UsersTab({ action }: { action?: string | null }) {
                   <select
                     value={editFormData.roleId}
                     onChange={(e) => setEditFormData({ ...editFormData, roleId: e.target.value })}
-                    className="w-full h-10 px-3 rounded-lg border border-gray-300 dark:border-[#333333] bg-white dark:bg-[#1C1C1C] text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-950 dark:focus:ring-gray-300 transition-all"
+                    className="w-full h-10 px-3 rounded-lg border border-gray-300 dark:border-[#1F1F1F] bg-white dark:bg-[#080808] text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-950 dark:focus:ring-gray-300 transition-all"
                   >
                     <option value="">בחר תפקיד</option>
                     {roles.map((role) => (
@@ -523,7 +523,7 @@ function UsersTab({ action }: { action?: string | null }) {
                   <select
                     value={editFormData.approvalStatus}
                     onChange={(e) => setEditFormData({ ...editFormData, approvalStatus: e.target.value })}
-                    className="w-full h-10 px-3 rounded-lg border border-gray-300 dark:border-[#333333] bg-white dark:bg-[#1C1C1C] text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-950 dark:focus:ring-gray-300 transition-all"
+                    className="w-full h-10 px-3 rounded-lg border border-gray-300 dark:border-[#1F1F1F] bg-white dark:bg-[#080808] text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-950 dark:focus:ring-gray-300 transition-all"
                   >
                     <option value="PENDING">ממתין</option>
                     <option value="APPROVED">מאושר</option>
@@ -585,7 +585,7 @@ function UsersTab({ action }: { action?: string | null }) {
                   <label className="block text-sm font-medium mb-1.5 text-gray-700 dark:text-gray-300">
                     שם מלא
                   </label>
-                  <div className="p-2 rounded-lg border border-gray-300 dark:border-[#333333] bg-gray-50 dark:bg-[#1C1C1C]">
+                  <div className="p-2 rounded-lg border border-gray-300 dark:border-[#1F1F1F] bg-gray-50 dark:bg-[#080808]">
                     {viewingPendingUser.name || 'לא מוגדר'}
                   </div>
                 </div>
@@ -593,7 +593,7 @@ function UsersTab({ action }: { action?: string | null }) {
                   <label className="block text-sm font-medium mb-1.5 text-gray-700 dark:text-gray-300">
                     מספר אישי
                   </label>
-                  <div className="p-2 rounded-lg border border-gray-300 dark:border-[#333333] bg-gray-50 dark:bg-[#1C1C1C]">
+                  <div className="p-2 rounded-lg border border-gray-300 dark:border-[#1F1F1F] bg-gray-50 dark:bg-[#080808]">
                     {viewingPendingUser.personalNumber || 'לא מוגדר'}
                   </div>
                 </div>
@@ -601,7 +601,7 @@ function UsersTab({ action }: { action?: string | null }) {
                   <label className="block text-sm font-medium mb-1.5 text-gray-700 dark:text-gray-300">
                     כתובת אימייל
                   </label>
-                  <div className="p-2 rounded-lg border border-gray-300 dark:border-[#333333] bg-gray-50 dark:bg-[#1C1C1C]">
+                  <div className="p-2 rounded-lg border border-gray-300 dark:border-[#1F1F1F] bg-gray-50 dark:bg-[#080808]">
                     {viewingPendingUser.email}
                   </div>
                 </div>
@@ -609,7 +609,7 @@ function UsersTab({ action }: { action?: string | null }) {
                   <label className="block text-sm font-medium mb-1.5 text-gray-700 dark:text-gray-300">
                     סוג
                   </label>
-                  <div className="p-2 rounded-lg border border-gray-300 dark:border-[#333333] bg-gray-50 dark:bg-[#1C1C1C]">
+                  <div className="p-2 rounded-lg border border-gray-300 dark:border-[#1F1F1F] bg-gray-50 dark:bg-[#080808]">
                     {viewingPendingUser.type === 'CONSCRIPT' ? 'חובה' : viewingPendingUser.type === 'PERMANENT' ? 'קבע' : 'לא מוגדר'}
                   </div>
                 </div>
@@ -617,7 +617,7 @@ function UsersTab({ action }: { action?: string | null }) {
                   <label className="block text-sm font-medium mb-1.5 text-gray-700 dark:text-gray-300">
                     מחלקה
                   </label>
-                  <div className="p-2 rounded-lg border border-gray-300 dark:border-[#333333] bg-gray-50 dark:bg-[#1C1C1C]">
+                  <div className="p-2 rounded-lg border border-gray-300 dark:border-[#1F1F1F] bg-gray-50 dark:bg-[#080808]">
                     {viewingPendingUser.department?.name || 'לא מוגדר'}
                   </div>
                 </div>
@@ -625,7 +625,7 @@ function UsersTab({ action }: { action?: string | null }) {
                   <label className="block text-sm font-medium mb-1.5 text-gray-700 dark:text-gray-300">
                     תפקיד
                   </label>
-                  <div className="p-2 rounded-lg border border-gray-300 dark:border-[#333333] bg-gray-50 dark:bg-[#1C1C1C]">
+                  <div className="p-2 rounded-lg border border-gray-300 dark:border-[#1F1F1F] bg-gray-50 dark:bg-[#080808]">
                     {viewingPendingUser.role?.name || 'לא מוגדר'}
                   </div>
                 </div>
@@ -633,7 +633,7 @@ function UsersTab({ action }: { action?: string | null }) {
                   <label className="block text-sm font-medium mb-1.5 text-gray-700 dark:text-gray-300">
                     מפקד
                   </label>
-                  <div className="p-2 rounded-lg border border-gray-300 dark:border-[#333333] bg-gray-50 dark:bg-[#1C1C1C]">
+                  <div className="p-2 rounded-lg border border-gray-300 dark:border-[#1F1F1F] bg-gray-50 dark:bg-[#080808]">
                     {viewingPendingUser.isCommander ? 'כן' : 'לא'}
                   </div>
                 </div>
@@ -641,7 +641,7 @@ function UsersTab({ action }: { action?: string | null }) {
                   <label className="block text-sm font-medium mb-1.5 text-gray-700 dark:text-gray-300">
                     תאריך יצירה
                   </label>
-                  <div className="p-2 rounded-lg border border-gray-300 dark:border-[#333333] bg-gray-50 dark:bg-[#1C1C1C]">
+                  <div className="p-2 rounded-lg border border-gray-300 dark:border-[#1F1F1F] bg-gray-50 dark:bg-[#080808]">
                     {new Date(viewingPendingUser.createdAt).toLocaleDateString('he-IL')}
                   </div>
                 </div>
@@ -768,7 +768,7 @@ function UsersTab({ action }: { action?: string | null }) {
               filteredUsers.map((user) => (
                 <div
                   key={user.id}
-                  className="flex items-center justify-between p-4 border border-gray-200 dark:border-[#333333] rounded-lg hover:bg-gray-50 dark:hover:bg-[#262626]/50 transition-colors"
+                  className="flex items-center justify-between p-4 border border-gray-200 dark:border-[#1F1F1F] rounded-lg hover:bg-gray-50 dark:hover:bg-[#262626]/50 transition-colors"
                 >
                   <div className="flex-1">
                     <div className="font-semibold text-gray-900 dark:text-gray-100">
@@ -929,7 +929,7 @@ function DepartmentsTab({ action }: { action?: string | null }) {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-300 dark:border-[#333333] border-t-gray-900 dark:border-t-[#FAFAFA]"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-300 dark:border-[#1F1F1F] border-t-gray-900 dark:border-t-[#FAFAFA]"></div>
       </div>
     );
   }
@@ -1013,7 +1013,7 @@ function DepartmentsTab({ action }: { action?: string | null }) {
               filteredDepartments.map((dept) => (
                 <div
                   key={dept.id}
-                  className="flex items-center justify-between p-4 border border-gray-200 dark:border-[#333333] rounded-lg hover:bg-gray-50 dark:hover:bg-[#262626]/50 transition-colors"
+                  className="flex items-center justify-between p-4 border border-gray-200 dark:border-[#1F1F1F] rounded-lg hover:bg-gray-50 dark:hover:bg-[#262626]/50 transition-colors"
                 >
                   <div className="flex-1">
                     <div className="font-semibold text-gray-900 dark:text-gray-100">
@@ -1150,7 +1150,7 @@ function RoomsTab({ action }: { action?: string | null }) {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-300 dark:border-[#333333] border-t-gray-900 dark:border-t-[#FAFAFA]"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-300 dark:border-[#1F1F1F] border-t-gray-900 dark:border-t-[#FAFAFA]"></div>
       </div>
     );
   }
@@ -1247,7 +1247,7 @@ function RoomsTab({ action }: { action?: string | null }) {
               filteredRooms.map((room) => (
                 <div
                   key={room.id}
-                  className="flex items-center justify-between p-4 border border-gray-200 dark:border-[#333333] rounded-lg hover:bg-gray-50 dark:hover:bg-[#262626]/50 transition-colors"
+                  className="flex items-center justify-between p-4 border border-gray-200 dark:border-[#1F1F1F] rounded-lg hover:bg-gray-50 dark:hover:bg-[#262626]/50 transition-colors"
                 >
                   <div className="flex-1">
                     <div className="font-semibold text-gray-900 dark:text-gray-100">
@@ -1367,7 +1367,7 @@ function RolesTab({ action }: { action?: string | null }) {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-300 dark:border-[#333333] border-t-gray-900 dark:border-t-[#FAFAFA]"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-300 dark:border-[#1F1F1F] border-t-gray-900 dark:border-t-[#FAFAFA]"></div>
       </div>
     );
   }
@@ -1451,7 +1451,7 @@ function RolesTab({ action }: { action?: string | null }) {
               filteredRoles.map((role) => (
                 <div
                   key={role.id}
-                  className="flex items-center justify-between p-4 border border-gray-200 dark:border-[#333333] rounded-lg hover:bg-gray-50 dark:hover:bg-[#262626]/50 transition-colors"
+                  className="flex items-center justify-between p-4 border border-gray-200 dark:border-[#1F1F1F] rounded-lg hover:bg-gray-50 dark:hover:bg-[#262626]/50 transition-colors"
                 >
                   <div className="flex-1">
                     <div className="font-semibold text-gray-900 dark:text-gray-100">

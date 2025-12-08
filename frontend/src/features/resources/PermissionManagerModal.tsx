@@ -158,7 +158,7 @@ export function PermissionManagerModal({
 
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-300 dark:border-[#333333] border-t-gray-900 dark:border-t-[#FAFAFA]"></div>
+            <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-300 dark:border-[#1F1F1F] border-t-gray-900 dark:border-t-[#FAFAFA]"></div>
           </div>
         ) : (
           <div className="space-y-6">
@@ -179,7 +179,7 @@ export function PermissionManagerModal({
                       return (
                         <div
                           key={page.page}
-                          className="p-4 rounded-lg border border-gray-200 dark:border-[#333333] bg-gray-50 dark:bg-[#1a1a1a]"
+                          className="p-4 rounded-lg border border-gray-200 dark:border-[#1F1F1F] bg-gray-50 dark:bg-[#1a1a1a]"
                         >
                           <div className="flex items-start justify-between mb-3">
                             <div className="flex-1">
@@ -247,7 +247,7 @@ export function PermissionManagerModal({
                             </Button>
                           </div>
                           {(hasView || hasEdit) && (
-                            <div className="mt-3 pt-3 border-t border-gray-200 dark:border-[#333333]">
+                            <div className="mt-3 pt-3 border-t border-gray-200 dark:border-[#1F1F1F]">
                               <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
                                 APIs שניתנו אוטומטית:
                               </p>

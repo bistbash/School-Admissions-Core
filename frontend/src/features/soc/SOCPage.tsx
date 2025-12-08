@@ -162,7 +162,7 @@ export function SOCPage() {
       case 'LOW':
         return 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900';
       default:
-        return 'text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-[#262626] border-gray-200 dark:border-[#333333]';
+        return 'text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-[#262626] border-gray-200 dark:border-[#1F1F1F]';
     }
   };
 
@@ -360,7 +360,7 @@ export function SOCPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 border-b border-gray-200 dark:border-[#333333]">
+      <div className="flex gap-2 border-b border-gray-200 dark:border-[#1F1F1F]">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           return (
@@ -384,7 +384,7 @@ export function SOCPage() {
       {/* Content */}
       {isLoading ? (
         <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-300 dark:border-[#333333] border-t-gray-900 dark:border-t-[#FAFAFA]"></div>
+          <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-300 dark:border-[#1F1F1F] border-t-gray-900 dark:border-t-[#FAFAFA]"></div>
         </div>
       ) : (
         <>
@@ -460,7 +460,7 @@ export function SOCPage() {
                     {incidents.slice(0, 5).map((incident) => (
                       <div
                         key={incident.id}
-                        className="flex items-center justify-between p-3 rounded-md bg-gray-100 dark:bg-[#262626] border border-gray-200 dark:border-[#333333]"
+                        className="flex items-center justify-between p-3 rounded-md bg-gray-100 dark:bg-[#262626] border border-gray-200 dark:border-[#1F1F1F]"
                       >
                         <div className="flex items-center gap-3">
                           {getStatusIcon(incident.incidentStatus)}
@@ -528,7 +528,7 @@ export function SOCPage() {
                       <div
                         key={incident.id}
                         className={cn(
-                          "flex items-center justify-between p-4 rounded-md bg-gray-100 dark:bg-[#262626] border border-gray-200 dark:border-[#333333]",
+                          "flex items-center justify-between p-4 rounded-md bg-gray-100 dark:bg-[#262626] border border-gray-200 dark:border-[#1F1F1F]",
                           selectedIncidents.includes(incident.id) && "ring-2 ring-blue-500 dark:ring-blue-400"
                         )}
                       >
@@ -614,7 +614,7 @@ export function SOCPage() {
                   {alerts.map((alert) => (
                     <div
                       key={alert.id}
-                      className="p-4 rounded-md bg-gray-100 dark:bg-[#262626] border border-gray-200 dark:border-[#333333]"
+                      className="p-4 rounded-md bg-gray-100 dark:bg-[#262626] border border-gray-200 dark:border-[#1F1F1F]"
                     >
                       <div className="flex items-start justify-between">
                         <div>
@@ -623,7 +623,7 @@ export function SOCPage() {
                             <span className="text-sm font-medium text-black dark:text-white">
                               {alert.action}
                             </span>
-                            <span className={cn('px-2 py-0.5 rounded text-xs', alert.status === 'FAILURE' ? 'bg-red-100 dark:bg-red-950/20 text-red-700 dark:text-red-400' : 'bg-gray-200 dark:bg-[#333333] text-gray-700 dark:text-gray-300')}>
+                            <span className={cn('px-2 py-0.5 rounded text-xs', alert.status === 'FAILURE' ? 'bg-red-100 dark:bg-red-950/20 text-red-700 dark:text-red-400' : 'bg-gray-200 dark:bg-[#1F1F1F] text-gray-700 dark:text-gray-300')}>
                               {alert.status}
                             </span>
                           </div>
@@ -690,7 +690,7 @@ export function SOCPage() {
                   <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                     <button
                       onClick={() => setShowBlockIP(!showBlockIP)}
-                      className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-[#333333] bg-gray-50 dark:bg-[#262626] hover:bg-gray-100 dark:hover:bg-[#1C1C1C] transition-colors text-right"
+                      className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-[#1F1F1F] bg-gray-50 dark:bg-[#262626] hover:bg-gray-100 dark:hover:bg-[#1C1C1C] transition-colors text-right"
                     >
                       <Ban className="h-5 w-5 text-red-600 dark:text-red-400" />
                       <div className="flex-1">
@@ -701,7 +701,7 @@ export function SOCPage() {
 
                     <button
                       onClick={() => setShowUserLookup(!showUserLookup)}
-                      className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-[#333333] bg-gray-50 dark:bg-[#262626] hover:bg-gray-100 dark:hover:bg-[#1C1C1C] transition-colors text-right"
+                      className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-[#1F1F1F] bg-gray-50 dark:bg-[#262626] hover:bg-gray-100 dark:hover:bg-[#1C1C1C] transition-colors text-right"
                     >
                       <UserSearch className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                       <div className="flex-1">
@@ -712,7 +712,7 @@ export function SOCPage() {
 
                     <button
                       onClick={() => setShowIPLookup(!showIPLookup)}
-                      className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-[#333333] bg-gray-50 dark:bg-[#262626] hover:bg-gray-100 dark:hover:bg-[#1C1C1C] transition-colors text-right"
+                      className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-[#1F1F1F] bg-gray-50 dark:bg-[#262626] hover:bg-gray-100 dark:hover:bg-[#1C1C1C] transition-colors text-right"
                     >
                       <Globe className="h-5 w-5 text-green-600 dark:text-green-400" />
                       <div className="flex-1">
@@ -723,7 +723,7 @@ export function SOCPage() {
 
                     <button
                       onClick={() => handleExport('csv')}
-                      className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-[#333333] bg-gray-50 dark:bg-[#262626] hover:bg-gray-100 dark:hover:bg-[#1C1C1C] transition-colors text-right"
+                      className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-[#1F1F1F] bg-gray-50 dark:bg-[#262626] hover:bg-gray-100 dark:hover:bg-[#1C1C1C] transition-colors text-right"
                     >
                       <Download className="h-5 w-5 text-purple-600 dark:text-purple-400" />
                       <div className="flex-1">
@@ -734,7 +734,7 @@ export function SOCPage() {
 
                     <button
                       onClick={() => setActiveTab('incidents')}
-                      className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-[#333333] bg-gray-50 dark:bg-[#262626] hover:bg-gray-100 dark:hover:bg-[#1C1C1C] transition-colors text-right"
+                      className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-[#1F1F1F] bg-gray-50 dark:bg-[#262626] hover:bg-gray-100 dark:hover:bg-[#1C1C1C] transition-colors text-right"
                     >
                       <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
                       <div className="flex-1">
@@ -745,7 +745,7 @@ export function SOCPage() {
 
                     <button
                       onClick={() => setActiveTab('blacklist')}
-                      className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-[#333333] bg-gray-50 dark:bg-[#262626] hover:bg-gray-100 dark:hover:bg-[#1C1C1C] transition-colors text-right"
+                      className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-[#1F1F1F] bg-gray-50 dark:bg-[#262626] hover:bg-gray-100 dark:hover:bg-[#1C1C1C] transition-colors text-right"
                     >
                       <Ban className="h-5 w-5 text-red-600 dark:text-red-400" />
                       <div className="flex-1">
@@ -779,7 +779,7 @@ export function SOCPage() {
                         value={blockIPValue}
                         onChange={(e) => setBlockIPValue(e.target.value)}
                         placeholder="192.168.1.1"
-                        className="w-full px-3 py-2 border border-gray-200 dark:border-[#333333] rounded-md bg-white dark:bg-[#1C1C1C] text-black dark:text-white"
+                        className="w-full px-3 py-2 border border-gray-200 dark:border-[#1F1F1F] rounded-md bg-white dark:bg-[#080808] text-black dark:text-white"
                       />
                     </div>
                     <div>
@@ -789,7 +789,7 @@ export function SOCPage() {
                         value={blockIPReason}
                         onChange={(e) => setBlockIPReason(e.target.value)}
                         placeholder="סיבת החסימה"
-                        className="w-full px-3 py-2 border border-gray-200 dark:border-[#333333] rounded-md bg-white dark:bg-[#1C1C1C] text-black dark:text-white"
+                        className="w-full px-3 py-2 border border-gray-200 dark:border-[#1F1F1F] rounded-md bg-white dark:bg-[#080808] text-black dark:text-white"
                       />
                     </div>
                     <div>
@@ -797,7 +797,7 @@ export function SOCPage() {
                       <select
                         value={blockDuration}
                         onChange={(e) => setBlockDuration(e.target.value as any)}
-                        className="w-full px-3 py-2 border border-gray-200 dark:border-[#333333] rounded-md bg-white dark:bg-[#1C1C1C] text-black dark:text-white mb-2"
+                        className="w-full px-3 py-2 border border-gray-200 dark:border-[#1F1F1F] rounded-md bg-white dark:bg-[#080808] text-black dark:text-white mb-2"
                       >
                         <option value="permanent">צמיתות</option>
                         <option value="1h">שעה אחת</option>
@@ -811,7 +811,7 @@ export function SOCPage() {
                           type="datetime-local"
                           value={blockExpiration}
                           onChange={(e) => setBlockExpiration(e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-200 dark:border-[#333333] rounded-md bg-white dark:bg-[#1C1C1C] text-black dark:text-white mt-2"
+                          className="w-full px-3 py-2 border border-gray-200 dark:border-[#1F1F1F] rounded-md bg-white dark:bg-[#080808] text-black dark:text-white mt-2"
                         />
                       )}
                     </div>
@@ -844,7 +844,7 @@ export function SOCPage() {
                         onChange={(e) => setUserLookupValue(e.target.value)}
                         onKeyPress={(e) => e.key === 'Enter' && handleUserLookup()}
                         placeholder="אימייל או שם משתמש"
-                        className="flex-1 px-3 py-2 border border-gray-200 dark:border-[#333333] rounded-md bg-white dark:bg-[#1C1C1C] text-black dark:text-white"
+                        className="flex-1 px-3 py-2 border border-gray-200 dark:border-[#1F1F1F] rounded-md bg-white dark:bg-[#080808] text-black dark:text-white"
                       />
                       <Button onClick={handleUserLookup}>
                         <Search className="h-4 w-4" />
@@ -853,7 +853,7 @@ export function SOCPage() {
                     {userLookupResults.length > 0 && (
                       <div className="space-y-2 max-h-60 overflow-y-auto">
                         {userLookupResults.map((result, idx) => (
-                          <div key={idx} className="p-3 rounded-md bg-gray-100 dark:bg-[#262626] border border-gray-200 dark:border-[#333333]">
+                          <div key={idx} className="p-3 rounded-md bg-gray-100 dark:bg-[#262626] border border-gray-200 dark:border-[#1F1F1F]">
                             <div className="text-sm font-medium text-black dark:text-white">
                               {result.name || result.userEmail || result.email}
                             </div>
@@ -892,7 +892,7 @@ export function SOCPage() {
                         onChange={(e) => setIPLookupValue(e.target.value)}
                         onKeyPress={(e) => e.key === 'Enter' && handleIPLookup()}
                         placeholder="192.168.1.1"
-                        className="flex-1 px-3 py-2 border border-gray-200 dark:border-[#333333] rounded-md bg-white dark:bg-[#1C1C1C] text-black dark:text-white"
+                        className="flex-1 px-3 py-2 border border-gray-200 dark:border-[#1F1F1F] rounded-md bg-white dark:bg-[#080808] text-black dark:text-white"
                       />
                       <Button onClick={handleIPLookup}>
                         <Search className="h-4 w-4" />
@@ -913,7 +913,7 @@ export function SOCPage() {
                           </div>
                         )}
                         {ipLookupResults.slice(1).map((result, idx) => (
-                          <div key={idx} className="p-3 rounded-md bg-gray-100 dark:bg-[#262626] border border-gray-200 dark:border-[#333333]">
+                          <div key={idx} className="p-3 rounded-md bg-gray-100 dark:bg-[#262626] border border-gray-200 dark:border-[#1F1F1F]">
                             <div className="text-sm font-medium text-black dark:text-white">
                               {result.action || 'פעילות'}
                             </div>
@@ -962,7 +962,7 @@ export function SOCPage() {
                             className={cn(
                               "flex items-center justify-between p-4 rounded-md border",
                               isExpired 
-                                ? "bg-gray-50 dark:bg-[#1C1C1C] border-gray-200 dark:border-[#333333] opacity-60"
+                                ? "bg-gray-50 dark:bg-[#080808] border-gray-200 dark:border-[#1F1F1F] opacity-60"
                                 : expiresSoon
                                 ? "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900"
                                 : "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-900"
@@ -981,7 +981,7 @@ export function SOCPage() {
                                     {blockedIP.ipAddress}
                                   </span>
                                   {isExpired && (
-                                    <span className="px-2 py-0.5 rounded text-xs bg-gray-200 dark:bg-[#333333] text-gray-600 dark:text-gray-400">
+                                    <span className="px-2 py-0.5 rounded text-xs bg-gray-200 dark:bg-[#1F1F1F] text-gray-600 dark:text-gray-400">
                                       פג תוקף
                                     </span>
                                   )}
@@ -1024,7 +1024,7 @@ export function SOCPage() {
                     )}
                   </div>
                   {blockedIPs.filter(ip => !ip.isActive).length > 0 && (
-                    <div className="mt-4 pt-4 border-t border-gray-200 dark:border-[#333333]">
+                    <div className="mt-4 pt-4 border-t border-gray-200 dark:border-[#1F1F1F]">
                       <div className="text-xs text-gray-500 dark:text-gray-500 mb-2">
                         IPs שהוסרו מהחסימה ({blockedIPs.filter(ip => !ip.isActive).length})
                       </div>
@@ -1034,7 +1034,7 @@ export function SOCPage() {
                           .map((blockedIP) => (
                             <div
                               key={blockedIP.id}
-                              className="flex items-center justify-between p-3 rounded-md bg-gray-50 dark:bg-[#1C1C1C] border border-gray-200 dark:border-[#333333] opacity-60"
+                              className="flex items-center justify-between p-3 rounded-md bg-gray-50 dark:bg-[#080808] border border-gray-200 dark:border-[#1F1F1F] opacity-60"
                             >
                               <div className="flex items-center gap-3">
                                 <span className="text-sm font-mono text-gray-500 dark:text-gray-500">
@@ -1071,7 +1071,7 @@ export function SOCPage() {
                       <select
                         value={filters.action}
                         onChange={(e) => setFilters({ ...filters, action: e.target.value })}
-                        className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-[#333333] rounded-md bg-white dark:bg-[#1C1C1C] text-black dark:text-white"
+                        className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-[#1F1F1F] rounded-md bg-white dark:bg-[#080808] text-black dark:text-white"
                       >
                         <option value="">הכל</option>
                         <option value="LOGIN_FAILED">כשלון התחברות</option>
@@ -1084,7 +1084,7 @@ export function SOCPage() {
                       <select
                         value={filters.status}
                         onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-                        className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-[#333333] rounded-md bg-white dark:bg-[#1C1C1C] text-black dark:text-white"
+                        className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-[#1F1F1F] rounded-md bg-white dark:bg-[#080808] text-black dark:text-white"
                       >
                         <option value="">הכל</option>
                         <option value="SUCCESS">הצלחה</option>
@@ -1097,7 +1097,7 @@ export function SOCPage() {
                       <select
                         value={filters.limit}
                         onChange={(e) => setFilters({ ...filters, limit: Number(e.target.value) })}
-                        className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-[#333333] rounded-md bg-white dark:bg-[#1C1C1C] text-black dark:text-white"
+                        className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-[#1F1F1F] rounded-md bg-white dark:bg-[#080808] text-black dark:text-white"
                       >
                         <option value="50">50</option>
                         <option value="100">100</option>
@@ -1119,7 +1119,7 @@ export function SOCPage() {
                     {logs.map((log) => (
                       <div
                         key={log.id}
-                        className="p-4 rounded-md bg-gray-100 dark:bg-[#262626] border border-gray-200 dark:border-[#333333]"
+                        className="p-4 rounded-md bg-gray-100 dark:bg-[#262626] border border-gray-200 dark:border-[#1F1F1F]"
                       >
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
@@ -1130,7 +1130,7 @@ export function SOCPage() {
                               <span className="text-xs text-gray-500 dark:text-gray-500">
                                 {log.resource}
                               </span>
-                              <span className={cn('px-2 py-0.5 rounded text-xs', log.status === 'FAILURE' ? 'bg-red-100 dark:bg-red-950/20 text-red-700 dark:text-red-400' : log.status === 'SUCCESS' ? 'bg-green-100 dark:bg-green-950/20 text-green-700 dark:text-green-400' : 'bg-gray-200 dark:bg-[#333333] text-gray-700 dark:text-gray-300')}>
+                              <span className={cn('px-2 py-0.5 rounded text-xs', log.status === 'FAILURE' ? 'bg-red-100 dark:bg-red-950/20 text-red-700 dark:text-red-400' : log.status === 'SUCCESS' ? 'bg-green-100 dark:bg-green-950/20 text-green-700 dark:text-green-400' : 'bg-gray-200 dark:bg-[#1F1F1F] text-gray-700 dark:text-gray-300')}>
                                 {log.status}
                               </span>
                             </div>

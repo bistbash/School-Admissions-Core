@@ -98,7 +98,7 @@ export function CompleteProfilePage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-[#171717] px-4 py-12">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-[#000000] px-4 py-12">
       <Card className="w-full max-w-2xl">
         <CardHeader>
           <div className="flex items-center gap-3">
@@ -145,7 +145,7 @@ export function CompleteProfilePage() {
                 <select
                   value={formData.departmentId}
                   onChange={(e) => setFormData({ ...formData, departmentId: e.target.value })}
-                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-[#333333] bg-white dark:bg-[#1C1C1C] text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white"
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-[#1F1F1F] bg-white dark:bg-[#080808] text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white"
                   required
                 >
                   <option value="">בחר מחלקה</option>
@@ -164,7 +164,7 @@ export function CompleteProfilePage() {
                 <select
                   value={formData.type}
                   onChange={(e) => setFormData({ ...formData, type: e.target.value as 'CONSCRIPT' | 'PERMANENT' })}
-                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-[#333333] bg-white dark:bg-[#1C1C1C] text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white"
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-[#1F1F1F] bg-white dark:bg-[#080808] text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white"
                   required
                 >
                   <option value="CONSCRIPT">חובה</option>
@@ -180,7 +180,7 @@ export function CompleteProfilePage() {
                 <select
                   value={formData.roleId}
                   onChange={(e) => setFormData({ ...formData, roleId: e.target.value })}
-                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-[#333333] bg-white dark:bg-[#1C1C1C] text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white"
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-[#1F1F1F] bg-white dark:bg-[#080808] text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white"
                 >
                   <option value="">בחר תפקיד</option>
                   {roles.map((role) => (
@@ -204,7 +204,7 @@ export function CompleteProfilePage() {
               </label>
             </div>
 
-            <div className="border-t border-gray-200 dark:border-[#333333] pt-4">
+            <div className="border-t border-gray-200 dark:border-[#1F1F1F] pt-4">
               <h3 className="text-sm font-medium mb-4 text-gray-900 dark:text-gray-100">
                 החלפת סיסמה
               </h3>

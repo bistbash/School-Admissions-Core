@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import type { ColorPreset } from '../lib/colors';
+import { getColorScheme, generateCSSVariables } from '../lib/colors';
 
 type Theme = 'light' | 'dark' | 'system';
 
@@ -6,6 +8,8 @@ interface ThemeContextType {
   theme: Theme;
   setTheme: (theme: Theme) => void;
   resolvedTheme: 'light' | 'dark';
+  colorPreset: ColorPreset;
+  setColorPreset: (preset: ColorPreset) => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
@@ -18,6 +22,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     return 'system';
   });
 
+  const [colorPreset, setColorPresetState] = useState<ColorPreset>(() => {
+    if (typeof window !== 'undefined') {
+      return (localStorage.getItem('colorPreset') as ColorPreset) || 'default';
+    }
+    return 'default';
+  });
+
   const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>(() => {
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem('theme');
@@ -28,21 +39,32 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     return 'light';
   });
 
+  // Apply color scheme based on theme and preset
   useEffect(() => {
     const root = window.document.documentElement;
     root.classList.remove('light', 'dark');
 
+    let currentTheme: 'light' | 'dark';
     if (theme === 'system') {
-      const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches
+      currentTheme = window.matchMedia('(prefers-color-scheme: dark)').matches
         ? 'dark'
         : 'light';
-      root.classList.add(systemTheme);
-      setResolvedTheme(systemTheme);
+      root.classList.add(currentTheme);
+      setResolvedTheme(currentTheme);
     } else {
+      currentTheme = theme;
       root.classList.add(theme);
       setResolvedTheme(theme);
     }
-  }, [theme]);
+
+    // Apply color scheme CSS variables
+    const colorScheme = getColorScheme(currentTheme, colorPreset);
+    const cssVars = generateCSSVariables(colorScheme);
+    
+    Object.entries(cssVars).forEach(([key, value]) => {
+      root.style.setProperty(key, value);
+    });
+  }, [theme, colorPreset]);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
@@ -52,12 +74,19 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         document.documentElement.classList.remove('light', 'dark');
         document.documentElement.classList.add(systemTheme);
         setResolvedTheme(systemTheme);
+        
+        // Reapply color scheme
+        const colorScheme = getColorScheme(systemTheme, colorPreset);
+        const cssVars = generateCSSVariables(colorScheme);
+        Object.entries(cssVars).forEach(([key, value]) => {
+          document.documentElement.style.setProperty(key, value);
+        });
       }
     };
 
     mediaQuery.addEventListener('change', handleChange);
     return () => mediaQuery.removeEventListener('change', handleChange);
-  }, [theme]);
+  }, [theme, colorPreset]);
 
   const setTheme = (newTheme: Theme) => {
     setThemeState(newTheme);
@@ -66,8 +95,15 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const setColorPreset = (preset: ColorPreset) => {
+    setColorPresetState(preset);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('colorPreset', preset);
+    }
+  };
+
   return (
-    <ThemeContext.Provider value={{ theme, setTheme, resolvedTheme }}>
+    <ThemeContext.Provider value={{ theme, setTheme, resolvedTheme, colorPreset, setColorPreset }}>
       {children}
     </ThemeContext.Provider>
   );

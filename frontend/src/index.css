@@ -5,6 +5,7 @@
 @tailwind utilities;
 
 @layer base {
+  /* Default light mode colors - will be overridden by JavaScript for presets */
   :root {
     --background: 0 0% 100%;
     --foreground: 0 0% 0%;
@@ -24,35 +25,47 @@
     --destructive-foreground: 0 0% 100%;
     --ring: 0 0% 0%;
     --radius: 0.5rem;
+    
+    /* Semantic color tokens for better efficiency */
+    --success: 142 76% 36%;
+    --warning: 38 92% 50%;
+    --error: 0 84.2% 60.2%;
+    --info: 217 91% 60%;
   }
 
+  /* Default dark mode colors - will be overridden by JavaScript for presets */
   .dark {
-    /* Modern dark mode - pleasant dark gray tones, balanced and readable */
-    --background: 0 0% 9%; /* #171717 - Main background (dark gray, not pure black) */
-    --foreground: 0 0% 98%; /* #FAFAFA - Primary text (very light, almost white) */
-    --card: 0 0% 11%; /* #1C1C1C - Card/container (slightly lighter than background) */
-    --card-foreground: 0 0% 98%; /* #FAFAFA - Card text */
-    --border: 0 0% 20%; /* #333333 - Borders (visible but not harsh) */
-    --input: 0 0% 13%; /* #212121 - Input background (slightly lighter) */
-    --primary: 0 0% 98%; /* #FAFAFA - Primary (light, similar to light mode's dark) */
-    --primary-foreground: 0 0% 9%; /* #171717 - Primary text (dark) */
-    --secondary: 0 0% 15%; /* #262626 - Secondary elements (lighter than background) */
-    --secondary-foreground: 0 0% 98%; /* #FAFAFA - Secondary text */
-    --muted: 0 0% 13%; /* #212121 - Muted backgrounds */
-    --muted-foreground: 0 0% 65%; /* #A6A6A6 - Secondary text (readable gray) */
-    --accent: 0 0% 15%; /* #262626 - Accent/hover states */
-    --accent-foreground: 0 0% 98%; /* #FAFAFA - Accent text */
+    --background: 0 0% 0%;
+    --foreground: 0 0% 98%;
+    --card: 0 0% 3%;
+    --card-foreground: 0 0% 98%;
+    --border: 0 0% 12%;
+    --input: 0 0% 5%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 0 0% 0%;
+    --secondary: 0 0% 8%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 0 0% 5%;
+    --muted-foreground: 0 0% 65%;
+    --accent: 0 0% 8%;
+    --accent-foreground: 0 0% 98%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
     --ring: 0 0% 98%;
+    
+    /* Semantic color tokens */
+    --success: 142 70% 45%;
+    --warning: 38 85% 55%;
+    --error: 0 75% 55%;
+    --info: 217 85% 60%;
   }
 
   * {
-    @apply border-gray-100 dark:border-[#333333];
+    @apply border-gray-100 dark:border-[hsl(var(--border))];
   }
 
   body {
-    @apply bg-white dark:bg-[#171717] text-black dark:text-[#FAFAFA];
+    @apply bg-[hsl(var(--background))] text-[hsl(var(--foreground))];
     font-feature-settings: "rlig" 1, "calt" 1;
     font-synthesis: none;
     text-rendering: optimizeLegibility;
@@ -82,7 +95,48 @@
   }
 
   .glass {
-    @apply bg-white/80 dark:bg-[#1C1C1C]/80 backdrop-blur-xl border border-gray-200/50 dark:border-[#333333]/50;
+    @apply bg-white/80 dark:bg-[hsl(var(--card))]/80 backdrop-blur-xl border border-gray-200/50 dark:border-[hsl(var(--border))]/50;
+  }
+  
+  /* Smart utility classes using CSS variables for efficiency */
+  .bg-surface {
+    @apply bg-[hsl(var(--card))];
+  }
+  
+  .bg-surface-elevated {
+    @apply bg-[hsl(var(--card))] dark:bg-[hsl(var(--card))];
+  }
+  
+  .text-primary {
+    @apply text-[hsl(var(--foreground))];
+  }
+  
+  .text-secondary {
+    @apply text-[hsl(var(--muted-foreground))];
+  }
+  
+  .border-default {
+    @apply border-[hsl(var(--border))];
+  }
+  
+  .bg-input {
+    @apply bg-[hsl(var(--input))];
+  }
+  
+  .bg-success {
+    @apply bg-[hsl(var(--success))];
+  }
+  
+  .bg-warning {
+    @apply bg-[hsl(var(--warning))];
+  }
+  
+  .bg-error {
+    @apply bg-[hsl(var(--error))];
+  }
+  
+  .bg-info {
+    @apply bg-[hsl(var(--info))];
   }
 
   .gradient-border {

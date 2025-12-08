@@ -136,7 +136,7 @@ export function UsersPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-300 dark:border-[#333333] border-t-gray-900 dark:border-t-[#FAFAFA]"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-300 dark:border-[#1F1F1F] border-t-gray-900 dark:border-t-[#FAFAFA]"></div>
       </div>
     );
   }
@@ -229,7 +229,7 @@ export function UsersPage() {
               {createdUsers.map((createdUser) => (
                 <div
                   key={createdUser.id}
-                  className="flex items-center justify-between p-4 border border-gray-200 dark:border-[#333333] rounded-lg bg-gray-50 dark:bg-[#1C1C1C]/50 hover:bg-gray-100 dark:hover:bg-[#262626] transition-colors"
+                  className="flex items-center justify-between p-4 border border-gray-200 dark:border-[#1F1F1F] rounded-lg bg-gray-50 dark:bg-[#080808]/50 hover:bg-gray-100 dark:hover:bg-[#141414] transition-colors"
                 >
                   <div className="flex-1">
                     <div className="font-semibold text-gray-900 dark:text-gray-100">
@@ -277,7 +277,7 @@ export function UsersPage() {
               {pendingUsers.map((pendingUser) => (
                 <div
                   key={pendingUser.id}
-                  className="flex items-center justify-between p-4 border border-gray-200 dark:border-[#333333] rounded-lg bg-gray-50 dark:bg-[#1C1C1C]/50 hover:bg-gray-100 dark:hover:bg-[#262626] transition-colors"
+                  className="flex items-center justify-between p-4 border border-gray-200 dark:border-[#1F1F1F] rounded-lg bg-gray-50 dark:bg-[#080808]/50 hover:bg-gray-100 dark:hover:bg-[#141414] transition-colors"
                 >
                   <div className="flex-1">
                     <div className="font-semibold text-gray-900 dark:text-gray-100">
@@ -357,7 +357,7 @@ export function UsersPage() {
               filteredUsers.map((user) => (
                 <div
                   key={user.id}
-                  className="flex items-center justify-between p-4 border border-gray-200 dark:border-[#333333] rounded-lg hover:bg-gray-50 dark:hover:bg-[#262626]/50 transition-colors"
+                  className="flex items-center justify-between p-4 border border-gray-200 dark:border-[#1F1F1F] rounded-lg hover:bg-gray-50 dark:hover:bg-[#262626]/50 transition-colors"
                 >
                   <div className="flex-1">
                     <div className="font-semibold text-gray-900 dark:text-gray-100">

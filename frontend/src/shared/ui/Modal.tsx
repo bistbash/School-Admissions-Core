@@ -63,14 +63,14 @@ export function Modal({
       {/* Modal */}
       <div
         className={cn(
-          'relative w-full bg-white dark:bg-[#1C1C1C] rounded-xl shadow-2xl border border-gray-200 dark:border-[#333333]',
+          'relative w-full bg-white dark:bg-[#080808] rounded-xl shadow-2xl border border-gray-200 dark:border-[#1F1F1F]',
           'animate-in zoom-in-95 fade-in duration-200',
           sizeClasses[size]
         )}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-[#333333]">
+        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-[#1F1F1F]">
           <h2 className="text-lg font-semibold text-black dark:text-white">
             {title}
           </h2>

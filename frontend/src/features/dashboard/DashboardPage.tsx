@@ -80,7 +80,7 @@ export function DashboardPage() {
 
       {isLoading ? (
         <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-300 dark:border-[#333333] border-t-gray-900 dark:border-t-[#FAFAFA]"></div>
+          <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-300 dark:border-[#1F1F1F] border-t-gray-900 dark:border-t-[#FAFAFA]"></div>
         </div>
       ) : (
         <>
@@ -130,11 +130,11 @@ export function DashboardPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between p-3 rounded-md bg-gray-100 dark:bg-[#262626] border border-gray-200 dark:border-[#333333]">
+                  <div className="flex items-center justify-between p-3 rounded-md bg-gray-100 dark:bg-[#262626] border border-gray-200 dark:border-[#1F1F1F]">
                     <span className="text-sm text-gray-600 dark:text-gray-400">משתמשים פעילים</span>
                     <span className="text-sm font-medium text-black dark:text-[#FAFAFA]">{stats.users}</span>
                   </div>
-                  <div className="flex items-center justify-between p-3 rounded-md bg-gray-100 dark:bg-[#262626] border border-gray-200 dark:border-[#333333]">
+                  <div className="flex items-center justify-between p-3 rounded-md bg-gray-100 dark:bg-[#262626] border border-gray-200 dark:border-[#1F1F1F]">
                     <span className="text-sm text-gray-600 dark:text-gray-400">תלמידים רשומים</span>
                     <span className="text-sm font-medium text-black dark:text-white">{stats.students}</span>
                   </div>
@@ -154,7 +154,7 @@ export function DashboardPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
-                  <div className="p-4 rounded-md bg-gray-100 dark:bg-[#262626] border border-gray-200 dark:border-[#333333]">
+                  <div className="p-4 rounded-md bg-gray-100 dark:bg-[#262626] border border-gray-200 dark:border-[#1F1F1F]">
                     <div className="text-2xl font-medium tracking-tight text-black dark:text-[#FAFAFA]">{stats.students}</div>
                     <div className="text-xs text-gray-500 dark:text-gray-500 mt-1">תלמידים במערכת</div>
                   </div>

@@ -149,7 +149,7 @@ export function PermissionsPage() {
       </div>
 
       {/* View Toggle */}
-      <div className="flex gap-2 border-b border-gray-200 dark:border-[#333333]">
+      <div className="flex gap-2 border-b border-gray-200 dark:border-[#1F1F1F]">
         <Button
           variant={activeView === 'pages' ? 'default' : 'ghost'}
           onClick={() => setActiveView('pages')}
@@ -172,7 +172,7 @@ export function PermissionsPage() {
         <>
       {isLoading ? (
         <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-300 dark:border-[#333333] border-t-gray-900 dark:border-t-[#FAFAFA]"></div>
+          <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-300 dark:border-[#1F1F1F] border-t-gray-900 dark:border-t-[#FAFAFA]"></div>
         </div>
       ) : (
         <>
@@ -195,7 +195,7 @@ export function PermissionsPage() {
                   permissions.map((perm) => (
                     <div
                       key={perm.id}
-                      className="flex items-center justify-between p-3 rounded-md bg-gray-100 dark:bg-[#262626] border border-gray-200 dark:border-[#333333]"
+                      className="flex items-center justify-between p-3 rounded-md bg-gray-100 dark:bg-[#262626] border border-gray-200 dark:border-[#1F1F1F]"
                     >
                       <div>
                         <div className="font-medium text-black dark:text-white">{perm.name}</div>
@@ -318,7 +318,7 @@ export function PermissionsPage() {
                 {filteredPermissions.map((perm) => (
                   <div
                     key={perm.id}
-                    className="flex items-center justify-between p-3 rounded-md bg-gray-100 dark:bg-[#262626] border border-gray-200 dark:border-[#333333]"
+                    className="flex items-center justify-between p-3 rounded-md bg-gray-100 dark:bg-[#262626] border border-gray-200 dark:border-[#1F1F1F]"
                   >
                     <div>
                       <div className="font-medium text-black dark:text-white">{perm.name}</div>
@@ -397,7 +397,7 @@ function RolePermissionsManager({
           return (
             <div
               key={perm.id}
-              className="flex items-center justify-between p-3 rounded-md bg-gray-100 dark:bg-[#262626] border border-gray-200 dark:border-[#333333]"
+              className="flex items-center justify-between p-3 rounded-md bg-gray-100 dark:bg-[#262626] border border-gray-200 dark:border-[#1F1F1F]"
             >
               <div>
                 <div className="font-medium text-black dark:text-white">{perm.name}</div>
@@ -492,7 +492,7 @@ function UserPermissionsManager({
           return (
             <div
               key={perm.id}
-              className="flex items-center justify-between p-3 rounded-md bg-gray-100 dark:bg-[#262626] border border-gray-200 dark:border-[#333333]"
+              className="flex items-center justify-between p-3 rounded-md bg-gray-100 dark:bg-[#262626] border border-gray-200 dark:border-[#1F1F1F]"
             >
               <div>
                 <div className="font-medium text-black dark:text-white">{perm.name}</div>

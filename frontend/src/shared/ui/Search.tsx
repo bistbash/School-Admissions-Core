@@ -321,8 +321,8 @@ export function Search({ className }: SearchProps) {
         }}
         className={cn(
           'flex items-center gap-3 w-full max-w-lg h-11 px-4',
-          'rounded-lg border border-gray-200 dark:border-[#333333]',
-          'bg-white dark:bg-[#1C1C1C]',
+          'rounded-lg border border-gray-200 dark:border-[#1F1F1F]',
+          'bg-white dark:bg-[#080808]',
           'text-sm text-gray-500 dark:text-gray-400',
           'hover:border-gray-300 dark:hover:border-[#404040]',
           'transition-all duration-150',
@@ -332,7 +332,7 @@ export function Search({ className }: SearchProps) {
       >
         <SearchIcon className="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
         <span className="flex-1 text-right text-gray-400 dark:text-gray-500">חפש...</span>
-        <kbd className="hidden sm:inline-flex h-5 select-none items-center gap-1 rounded border border-gray-200 dark:border-[#333333] bg-gray-50 dark:bg-[#1C1C1C] px-1.5 font-mono text-[10px] font-medium text-gray-500 dark:text-gray-400">
+        <kbd className="hidden sm:inline-flex h-5 select-none items-center gap-1 rounded border border-gray-200 dark:border-[#1F1F1F] bg-gray-50 dark:bg-[#080808] px-1.5 font-mono text-[10px] font-medium text-gray-500 dark:text-gray-400">
           <Command className="h-3 w-3" />
           <span>K</span>
         </kbd>
@@ -358,8 +358,8 @@ export function Search({ className }: SearchProps) {
           <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-2xl mx-4">
             <div
               className={cn(
-                'bg-white dark:bg-[#1C1C1C]',
-                'border border-gray-200 dark:border-[#333333]',
+                'bg-white dark:bg-[#080808]',
+                'border border-gray-200 dark:border-[#1F1F1F]',
                 'rounded-xl shadow-2xl',
                 'overflow-hidden',
                 'transform transition-all duration-300 ease-out',
@@ -368,7 +368,7 @@ export function Search({ className }: SearchProps) {
               onClick={(e) => e.stopPropagation()}
             >
               {/* Search Input */}
-              <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-200 dark:border-[#333333]">
+              <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-200 dark:border-[#1F1F1F]">
                 <SearchIcon className="h-4 w-4 text-gray-400 dark:text-gray-500 shrink-0" />
                 <input
                   ref={inputRef}
@@ -420,14 +420,14 @@ export function Search({ className }: SearchProps) {
                           'w-full flex items-center gap-3 px-4 py-2.5',
                           'text-right transition-colors',
                           selectedIndex === index
-                            ? 'bg-gray-100 dark:bg-[#262626]'
-                            : 'hover:bg-gray-50 dark:hover:bg-[#1C1C1C]'
+                            ? 'bg-gray-100 dark:bg-[#141414]'
+                            : 'hover:bg-gray-50 dark:hover:bg-[#080808]'
                         )}
                       >
                         <div
                           className={cn(
                             'p-1.5 rounded',
-                            'bg-gray-100 dark:bg-[#262626]',
+                            'bg-gray-100 dark:bg-[#141414]',
                             'text-gray-600 dark:text-gray-400'
                           )}
                         >
@@ -443,7 +443,7 @@ export function Search({ className }: SearchProps) {
                             </div>
                           )}
                         </div>
-                        <span className="text-xs text-gray-400 dark:text-gray-500 shrink-0 px-2 py-0.5 rounded bg-gray-100 dark:bg-[#262626]">
+                        <span className="text-xs text-gray-400 dark:text-gray-500 shrink-0 px-2 py-0.5 rounded bg-gray-100 dark:bg-[#141414]">
                           {getTypeLabel(result.type)}
                         </span>
                       </button>
