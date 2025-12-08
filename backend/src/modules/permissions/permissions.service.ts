@@ -120,7 +120,7 @@ export class PermissionsService {
     const permissions = new Map<number, typeof userPermissions[0]['permission']>();
     
     // Add direct user permissions
-    userPermissions.forEach(up => {
+    userPermissions.forEach((up: any) => {
       permissions.set(up.permission.id, up.permission);
     });
 
@@ -136,7 +136,7 @@ export class PermissionsService {
         },
       });
 
-      rolePermissions.forEach(rp => {
+      rolePermissions.forEach((rp: any) => {
         permissions.set(rp.permission.id, rp.permission);
       });
     }
@@ -174,7 +174,7 @@ export class PermissionsService {
     // Check if user is approved - only approved users can receive permissions
     const user = await prisma.soldier.findUnique({
       where: { id: userId },
-      select: { approvalStatus: true },
+      select: { approvalStatus: true, id: true },
     });
 
     if (!user) {
@@ -307,7 +307,7 @@ export class PermissionsService {
       },
     });
 
-    return userPermissions.map(up => up.user);
+    return userPermissions.map((up: any) => up.user);
   }
 
   /**
@@ -318,7 +318,7 @@ export class PermissionsService {
     // Get user with role
     const user = await prisma.soldier.findUnique({
       where: { id: userId },
-      select: { roleId: true, isAdmin: true },
+      select: { roleId: true, isAdmin: true, id: true },
     });
 
     // Admins have all permissions - return all permissions as if granted directly
@@ -330,7 +330,7 @@ export class PermissionsService {
         ],
       });
 
-      return allPermissions.map(perm => ({
+      return allPermissions.map((perm: any) => ({
         id: 0, // Virtual ID for admin permissions
         userId,
         permissionId: perm.id,
@@ -449,7 +449,7 @@ export class PermissionsService {
     // Check if user is approved - only approved users can receive permissions
     const user = await prisma.soldier.findUnique({
       where: { id: userId },
-      select: { isAdmin: true, approvalStatus: true },
+      select: { isAdmin: true, approvalStatus: true, id: true },
     });
 
     if (!user) {
@@ -558,7 +558,7 @@ export class PermissionsService {
     // Check if user is admin - admins have all permissions
     const user = await prisma.soldier.findUnique({
       where: { id: userId },
-      select: { isAdmin: true },
+      select: { isAdmin: true, id: true },
     });
 
     if (user?.isAdmin) {
@@ -580,7 +580,7 @@ export class PermissionsService {
     });
 
     // Check user permissions
-    userPermissions.forEach(up => {
+    userPermissions.forEach((up: any) => {
       const perm = up.permission;
       if (perm.resource === 'page') {
         const match = perm.action.match(/^(.+):(view|edit)$/);

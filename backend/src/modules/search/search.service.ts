@@ -63,8 +63,8 @@ const AVAILABLE_PAGES: PageDefinition[] = [
   },
   {
     path: '/student-exits',
-    name: 'יציאות תלמידים',
-    description: 'ניהול יציאות תלמידים',
+    name: 'עזיבת תלמידים',
+    description: 'ניהול עזיבת תלמידים',
     resource: 'student-exits',
     action: 'read',
     icon: 'LogOut',
