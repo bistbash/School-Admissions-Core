@@ -1,342 +1,231 @@
-# מערכת הרשאות דינמית - מדריך שימוש
+# Enterprise Permissions System
 
-## סקירה כללית
+## Overview
 
-המערכת תומכת בהרשאות דינמיות ומתקדמות, בדומה לאתרים גדולים. המערכת מאפשרת:
+This document describes the enterprise-level permissions system implemented for the School Admissions Core application. The system provides a comprehensive, scalable approach to managing permissions at both the page and API level.
 
-1. **Scoped Permissions** - הרשאות מוגבלות למשאבים ספציפיים
-2. **Permission Policies** - כללים דינמיים (למשל: מפקד רואה רק את החיילים במחלקה שלו)
-3. **Dynamic UI** - TABs ורכיבים שמופיעים לפי הרשאות
-4. **Context-aware permissions** - בדיקות הרשאות תלויות הקשר
+## Key Features
 
-## מבנה הרשאות
+### 1. Page-Based Permissions
+- Permissions are defined at the page level (view/edit)
+- When a user gets permission for a page, they automatically receive permissions for the corresponding APIs
+- Supports both view and edit permissions
+- Admin-only pages can be marked to restrict editing to administrators only
 
-### פורמט בסיסי
-```
-resource:action
-```
-דוגמה: `soldiers.read`, `students.write`
+### 2. Automatic API Permission Granting
+- When granting page permissions, the system automatically grants all related API permissions
+- This ensures consistency and reduces manual permission management
+- API permissions are organized by resource and action (e.g., `students:read`, `students:create`)
 
-### Scoped Permissions
-```
-resource:action:scopeType:scopeValue
-```
-דוגמאות:
-- `soldiers.read:department:123` - קריאה לחיילים במחלקה 123
-- `students.read:all` - קריאה לכל התלמידים
-- `users.manage:role:5` - ניהול משתמשים עם תפקיד 5
+### 3. Role and User Permissions
+- Permissions can be granted to:
+  - Individual users (direct permissions)
+  - Roles (all users with the role get the permissions)
+- Users inherit permissions from their roles
+- Direct user permissions take precedence
 
-### Scope Types
-- `department` - מוגבל למחלקה ספציפית
-- `role` - מוגבל לתפקיד ספציפי
-- `user` - מוגבל למשתמש ספציפי
-- `all` - גישה לכל המשאבים
+### 4. Frontend Integration
+- Permission checks are integrated into the frontend routing
+- `PermissionGuard` component protects routes based on page permissions
+- Permission management UI allows admins to manage permissions visually
 
-## שימוש ב-Frontend
+## Architecture
 
-### 1. PermissionGuard - הגנה על רכיבים
+### Backend
 
-```tsx
-import { PermissionGuard } from '../components/PermissionGuard';
-
-// הרשאה בסיסית
-<PermissionGuard permission="soldiers.read">
-  <SoldiersList />
-</PermissionGuard>
-
-// עם resource/action
-<PermissionGuard resource="students" action="write">
-  <CreateStudentForm />
-</PermissionGuard>
-
-// עם scope
-<PermissionGuard 
-  permission="soldiers.read:department"
-  resourceData={{ departmentId: 123 }}
->
-  <DepartmentSoldiers />
-</PermissionGuard>
-```
-
-### 2. useHasPermission Hook
-
-```tsx
-import { useHasPermission } from '../hooks/usePermission';
-
-function MyComponent() {
-  const hasPermission = useHasPermission();
-  
-  // בדיקת הרשאה בסיסית
-  const canRead = hasPermission('soldiers.read');
-  
-  // בדיקת הרשאה עם scope
-  const canReadDept = hasPermission('soldiers.read:department:123');
-  
-  // עם אובייקט
-  const canWrite = hasPermission({
-    resource: 'students',
-    action: 'write',
-    scope: { type: 'department', value: 123 }
-  });
-  
-  return canRead ? <SoldiersList /> : null;
-}
-```
-
-### 3. useCanAccessResource - בדיקת גישה למשאב ספציפי
-
-```tsx
-import { useCanAccessResource } from '../hooks/usePermission';
-
-function SoldierCard({ soldier }) {
-  const canAccess = useCanAccessResource();
-  
-  const canEdit = canAccess('soldiers', 'write', {
-    departmentId: soldier.departmentId,
-    userId: soldier.id
-  });
-  
-  return (
-    <div>
-      <h3>{soldier.name}</h3>
-      {canEdit && <EditButton />}
-    </div>
-  );
-}
-```
-
-### 4. useFilteredResources - סינון משאבים לפי הרשאות
-
-```tsx
-import { useFilteredResources } from '../hooks/usePermission';
-
-function SoldiersList({ allSoldiers }) {
-  const filterResources = useFilteredResources();
-  
-  // רק חיילים שהמשתמש יכול לראות
-  const visibleSoldiers = filterResources(
-    allSoldiers,
-    'soldiers',
-    'read'
-  );
-  
-  return (
-    <ul>
-      {visibleSoldiers.map(soldier => (
-        <li key={soldier.id}>{soldier.name}</li>
-      ))}
-    </ul>
-  );
-}
-```
-
-### 5. Dynamic Navigation - ניווט דינמי
-
-```tsx
-import { useDynamicNavigation } from '../hooks/useDynamicNavigation';
-
-const navigationItems = [
-  { name: 'לוח בקרה', href: '/dashboard', icon: Dashboard },
-  {
-    name: 'חיילים',
-    href: '/soldiers',
-    icon: Users,
-    permission: 'soldiers.read:department', // רק במחלקה של המשתמש
-  },
-  {
-    name: 'ניהול',
-    href: '/admin',
-    icon: Settings,
-    permission: 'admin.access',
-    children: [
-      {
-        name: 'משתמשים',
-        href: '/admin/users',
-        permission: 'users.manage',
-      },
-    ],
-  },
-];
-
-function MyNavigation() {
-  const navigation = useDynamicNavigation(navigationItems);
-  // navigation מכיל רק את הפריטים שהמשתמש יכול לראות
-  return navigation.map(item => <NavItem key={item.href} {...item} />);
-}
-```
-
-## שימוש ב-Backend
-
-### 1. Permission Middleware
+#### Permission Registry (`backend/src/lib/permissions/permission-registry.ts`)
+Defines all pages and their associated API endpoints:
 
 ```typescript
-import { requirePermission } from '../lib/permissions';
-
-// הרשאה בסיסית
-router.get('/soldiers', 
-  authenticate, 
-  requirePermission('soldiers.read'),
-  soldiersController.getAll
-);
-
-// עם policies
-router.get('/soldiers',
-  authenticate,
-  requirePermission('soldiers.read', ['commanderDepartmentScope']),
-  soldiersController.getAll
-);
-```
-
-### 2. Permission Policies
-
-```typescript
-import { permissionPolicies } from '../lib/permissions';
-
-// Policy מובנה: מפקד רואה רק את המחלקה שלו
-router.get('/soldiers',
-  authenticate,
-  requirePermission('soldiers.read', ['commanderDepartmentScope']),
-  async (req, res) => {
-    // רק חיילים במחלקה של המפקד יוחזרו
-    const soldiers = await getSoldiers();
-    res.json(soldiers);
+{
+  'students': {
+    page: 'students',
+    displayName: 'Students',
+    description: 'Manage students',
+    category: 'academic',
+    viewAPIs: [...],
+    editAPIs: [...],
+    adminOnly: true
   }
-);
-```
-
-### 3. Filter Resources by Permission
-
-```typescript
-import { filterResourcesByPermission } from '../lib/permissions';
-
-async function getSoldiersForUser(userId: number) {
-  const allSoldiers = await prisma.soldier.findMany();
-  
-  // סינון אוטומטי לפי הרשאות ו-policies
-  const filtered = await filterResourcesByPermission(
-    userId,
-    allSoldiers,
-    'soldiers.read',
-    ['commanderDepartmentScope']
-  );
-  
-  return filtered;
 }
 ```
 
-## דוגמאות שימוש
+#### Permission Service (`backend/src/modules/permissions/permissions.service.ts`)
+- `grantPagePermission()` - Grants page permission and automatically grants API permissions
+- `revokePagePermission()` - Revokes page permission and automatically revokes API permissions
+- `getUserPagePermissions()` - Gets all page permissions for a user
+- `grantPagePermissionToRole()` - Grants page permission to a role
 
-### דוגמה 1: מפקד רואה רק את החיילים במחלקה שלו
+#### Permission Middleware (`backend/src/lib/permissions/permission-middleware.ts`)
+- `requirePermission` - Middleware to check API permissions automatically
+- `requireResourcePermission` - Middleware for specific resource/action checks
 
-**Backend:**
-```typescript
-router.get('/soldiers',
-  authenticate,
-  requirePermission('soldiers.read', ['commanderDepartmentScope']),
-  async (req, res) => {
-    const user = req.user;
-    const soldiers = await getSoldiersForUser(user.userId);
-    res.json(soldiers);
-  }
-);
+### Frontend
+
+#### Permissions Context (`frontend/src/features/permissions/PermissionsContext.tsx`)
+- Provides permission state to all components
+- `hasPagePermission(page, action)` - Check if user has page permission
+- `hasResourcePermission(resource, action)` - Check if user has API permission
+
+#### Permission Guard (`frontend/src/features/permissions/PermissionGuard.tsx`)
+- Protects routes based on page permissions
+- Usage: `<PermissionGuard page="students" pageAction="view">...</PermissionGuard>`
+
+#### Page Permissions Manager (`frontend/src/features/permissions/PagePermissionsManager.tsx`)
+- UI for managing page-based permissions
+- Shows all pages organized by category
+- Allows granting/revoking view and edit permissions
+- Shows which APIs are automatically granted
+
+## Database Schema
+
+The system uses the existing permission tables:
+- `Permission` - Stores all permissions (page and API)
+- `UserPermission` - Links users to permissions
+- `RolePermission` - Links roles to permissions
+
+Page permissions are stored with the format:
+- `page:students:view` - View permission for students page
+- `page:students:edit` - Edit permission for students page
+
+## Usage
+
+### Seeding Permissions
+
+Run the seed script to initialize all permissions:
+
+```bash
+cd backend
+npm run seed-permissions
 ```
 
-**Frontend:**
-```tsx
-function SoldiersPage() {
-  const filterResources = useFilteredResources();
-  const [soldiers, setSoldiers] = useState([]);
-  
-  useEffect(() => {
-    apiClient.get('/soldiers').then(res => {
-      // סינון נוסף בצד הלקוח (אם צריך)
-      const filtered = filterResources(res.data, 'soldiers', 'read');
-      setSoldiers(filtered);
-    });
-  }, []);
-  
-  return <SoldiersList soldiers={soldiers} />;
-}
-```
-
-### דוגמה 2: TABs דינמיים לפי הרשאות
-
-```tsx
-function StudentsPage() {
-  const hasPermission = useHasPermission();
-  
-  const tabs = [
-    { id: 'all', label: 'כל התלמידים', permission: 'students.read:all' },
-    { id: 'my-class', label: 'הכיתה שלי', permission: 'students.read:class' },
-    { id: 'my-department', label: 'המחלקה שלי', permission: 'students.read:department' },
-  ].filter(tab => hasPermission(tab.permission));
-  
-  return (
-    <Tabs>
-      {tabs.map(tab => (
-        <Tab key={tab.id} value={tab.id}>
-          {tab.label}
-        </Tab>
-      ))}
-    </Tabs>
-  );
-}
-```
-
-### דוגמה 3: Navigation עם הרשאות מותאמות אישית
-
-```tsx
-const navigationItems = [
-  { name: 'לוח בקרה', href: '/dashboard' },
-  {
-    name: 'חיילים',
-    href: '/soldiers',
-    permission: {
-      resource: 'soldiers',
-      action: 'read',
-      scope: { type: 'department' } // משתמש במחלקה של המשתמש
-    },
-  },
-  {
-    name: 'ניהול',
-    href: '/admin',
-    permission: 'admin.access',
-    visible: false, // יוצג רק אם יש הרשאה
-  },
-];
-```
-
-## יצירת Permission Policies מותאמים
+### Granting Page Permissions (Backend)
 
 ```typescript
-// backend/src/lib/permissions.ts
+// Grant view permission to user
+await permissionsService.grantPagePermission(userId, 'students', 'view', adminUserId);
 
-export const permissionPolicies: Record<string, PermissionPolicy> = {
-  // Policy מותאם אישית
-  myCustomPolicy: {
-    name: 'myCustomPolicy',
-    description: 'Policy מותאם אישית',
-    check: async (context: PermissionContext, resource?: any) => {
-      // הלוגיקה שלך כאן
-      if (context.isCommander && resource) {
-        return resource.departmentId === context.departmentId;
-      }
-      return true;
-    },
-  },
-};
+// Grant edit permission to role
+await permissionsService.grantPagePermissionToRole(roleId, 'students', 'edit', adminUserId);
 ```
 
-## טיפים
+### Checking Permissions (Frontend)
 
-1. **תמיד בדוק הרשאות גם ב-backend וגם ב-frontend** - Frontend רק ל-UX, Backend לאבטחה
-2. **השתמש ב-policies לכללים מורכבים** - לא צריך ליצור הרשאה חדשה לכל כלל
-3. **Scoped permissions עבור גישה מוגבלת** - למשל מפקד במחלקה
-4. **Dynamic navigation ל-UX טוב יותר** - משתמשים רואים רק מה שהם יכולים להשתמש בו
+```typescript
+// In a component
+const { hasPagePermission } = usePermissions();
+const canView = hasPagePermission('students', 'view');
+const canEdit = hasPagePermission('students', 'edit');
+```
 
-## הערות
+### Protecting Routes (Frontend)
 
-- Admins תמיד יש להם את כל ההרשאות
-- Scoped permissions משתמשים בהקשר של המשתמש (departmentId, roleId, וכו')
-- Policies מופעלות אחרי בדיקת ההרשאה הבסיסית
-- המערכת תומכת בהרחבות עתידיות בקלות
+```typescript
+<Route 
+  path="students" 
+  element={
+    <PermissionGuard page="students" pageAction="view" fallback={<Error403Page />}>
+      <StudentsPage />
+    </PermissionGuard>
+  } 
+/>
+```
+
+### Protecting API Routes (Backend)
+
+```typescript
+// Automatic permission check based on route
+router.get('/students', authenticate, requirePermission, controller.getAll);
+
+// Specific permission check
+router.post('/students', authenticate, requireResourcePermission('students', 'create'), controller.create);
+```
+
+## Page Registry
+
+All available pages are defined in `permission-registry.ts`:
+
+- **Dashboard** - View dashboard
+- **Students** - Manage students (admin only)
+- **Cohorts** - Manage cohorts (admin only)
+- **Classes** - Manage classes (admin only)
+- **Student Exits** - Manage student exits (admin only)
+- **Users** - Manage users (admin only)
+- **Departments** - Manage departments (admin only)
+- **Roles** - Manage roles (admin only)
+- **Rooms** - Manage rooms (admin only)
+- **Permissions** - Manage permissions (admin only)
+- **SOC** - Security operations center (admin only)
+- **API Keys** - Manage API keys (admin only)
+- **Resources** - View resources
+- **Search** - Search functionality
+
+## Admin-Only Pages
+
+The following pages are marked as `adminOnly: true`, meaning only administrators can edit them:
+- Students
+- Cohorts
+- Classes
+- Student Exits
+- Users
+- Departments
+- Roles
+- Rooms
+- Permissions
+- SOC
+- API Keys
+
+## API Endpoints
+
+### Get All Page Permissions
+```
+GET /api/permissions/pages
+```
+
+### Get User's Page Permissions
+```
+GET /api/permissions/my-page-permissions
+GET /api/permissions/users/:userId/page-permissions
+```
+
+### Grant Page Permission
+```
+POST /api/permissions/users/:userId/grant-page
+Body: { page: 'students', action: 'view' }
+```
+
+### Revoke Page Permission
+```
+POST /api/permissions/users/:userId/revoke-page
+Body: { page: 'students', action: 'view' }
+```
+
+### Grant Page Permission to Role
+```
+POST /api/permissions/roles/:roleId/grant-page
+Body: { page: 'students', action: 'view' }
+```
+
+## Best Practices
+
+1. **Always use page permissions for frontend routes** - This ensures consistency and automatic API permission management
+2. **Use admin-only flag for sensitive pages** - Prevents accidental permission grants
+3. **Grant permissions to roles when possible** - Easier to manage than individual user permissions
+4. **Run seed script after schema changes** - Ensures all permissions exist in the database
+5. **Use PermissionGuard for all protected routes** - Provides consistent access control
+
+## Migration Guide
+
+If you have existing permissions, they will continue to work. The new page-based system is additive:
+
+1. Run the seed script to create all page and API permissions
+2. Grant page permissions to users/roles as needed
+3. Update frontend routes to use `PermissionGuard` with page permissions
+4. Existing API permissions will continue to work alongside page permissions
+
+## Security Considerations
+
+1. **Admin-only enforcement** - The system enforces admin-only restrictions at both the service and UI level
+2. **Automatic API permission management** - Reduces risk of inconsistent permissions
+3. **Audit logging** - All permission changes are logged
+4. **Role-based access** - Permissions can be managed at the role level for easier administration

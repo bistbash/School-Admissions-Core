@@ -179,4 +179,189 @@ export class PermissionsController {
       next(error);
     }
   }
+
+  /**
+   * Get all page permissions (registry)
+   */
+  async getAllPagePermissions(req: Request, res: Response, next: NextFunction) {
+    try {
+      const pages = permissionsService.getAllPagePermissions();
+      res.json(pages);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Get user's page permissions
+   */
+  async getUserPagePermissions(req: Request, res: Response, next: NextFunction) {
+    try {
+      const userId = parseInt(req.params.userId);
+      const pagePermissions = await permissionsService.getUserPagePermissions(userId);
+      res.json(pagePermissions);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Get my page permissions
+   */
+  async getMyPagePermissions(req: Request, res: Response, next: NextFunction) {
+    try {
+      const user = (req as any).user;
+      const pagePermissions = await permissionsService.getUserPagePermissions(user.userId);
+      res.json(pagePermissions);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Grant page permission to user (Admin only)
+   */
+  async grantPagePermission(req: Request, res: Response, next: NextFunction) {
+    try {
+      const adminUser = (req as any).user;
+      const userId = parseInt(req.params.userId);
+      const { page, action } = req.body;
+
+      if (!page || !action) {
+        return res.status(400).json({ error: 'Page and action are required' });
+      }
+
+      if (!['view', 'edit'].includes(action)) {
+        return res.status(400).json({ error: 'Action must be "view" or "edit"' });
+      }
+
+      const result = await permissionsService.grantPagePermission(
+        userId,
+        page,
+        action,
+        adminUser.userId
+      );
+
+      await auditFromRequest(req, 'UPDATE', 'PERMISSION', {
+        status: 'SUCCESS',
+        resourceId: result.pagePermission.id,
+        details: {
+          action: 'grant_page_permission',
+          userId,
+          page,
+          action,
+          grantedBy: adminUser.userId,
+          apiPermissionsGranted: result.apiPermissions,
+        },
+      });
+
+      res.json(result);
+    } catch (error) {
+      await auditFromRequest(req, 'UPDATE', 'PERMISSION', {
+        status: 'FAILURE',
+        errorMessage: error instanceof Error ? error.message : 'Failed to grant page permission',
+        details: {
+          action: 'grant_page_permission',
+          userId: req.params.userId,
+        },
+      });
+      next(error);
+    }
+  }
+
+  /**
+   * Revoke page permission from user (Admin only)
+   */
+  async revokePagePermission(req: Request, res: Response, next: NextFunction) {
+    try {
+      const adminUser = (req as any).user;
+      const userId = parseInt(req.params.userId);
+      const { page, action } = req.body;
+
+      if (!page || !action) {
+        return res.status(400).json({ error: 'Page and action are required' });
+      }
+
+      if (!['view', 'edit'].includes(action)) {
+        return res.status(400).json({ error: 'Action must be "view" or "edit"' });
+      }
+
+      const result = await permissionsService.revokePagePermission(userId, page, action);
+
+      await auditFromRequest(req, 'UPDATE', 'PERMISSION', {
+        status: 'SUCCESS',
+        resourceId: result.pagePermission.id,
+        details: {
+          action: 'revoke_page_permission',
+          userId,
+          page,
+          action,
+          revokedBy: adminUser.userId,
+          apiPermissionsRevoked: result.apiPermissions,
+        },
+      });
+
+      res.json(result);
+    } catch (error) {
+      await auditFromRequest(req, 'UPDATE', 'PERMISSION', {
+        status: 'FAILURE',
+        errorMessage: error instanceof Error ? error.message : 'Failed to revoke page permission',
+        details: {
+          action: 'revoke_page_permission',
+          userId: req.params.userId,
+        },
+      });
+      next(error);
+    }
+  }
+
+  /**
+   * Grant page permission to role (Admin only)
+   */
+  async grantPagePermissionToRole(req: Request, res: Response, next: NextFunction) {
+    try {
+      const adminUser = (req as any).user;
+      const roleId = parseInt(req.params.roleId);
+      const { page, action } = req.body;
+
+      if (!page || !action) {
+        return res.status(400).json({ error: 'Page and action are required' });
+      }
+
+      if (!['view', 'edit'].includes(action)) {
+        return res.status(400).json({ error: 'Action must be "view" or "edit"' });
+      }
+
+      const result = await permissionsService.grantPagePermissionToRole(
+        roleId,
+        page,
+        action,
+        adminUser.userId
+      );
+
+      await auditFromRequest(req, 'UPDATE', 'PERMISSION', {
+        status: 'SUCCESS',
+        details: {
+          action: 'grant_page_permission_to_role',
+          roleId,
+          page,
+          action,
+          grantedBy: adminUser.userId,
+          apiPermissionsGranted: result.apiPermissions,
+        },
+      });
+
+      res.json(result);
+    } catch (error) {
+      await auditFromRequest(req, 'UPDATE', 'PERMISSION', {
+        status: 'FAILURE',
+        errorMessage: error instanceof Error ? error.message : 'Failed to grant page permission to role',
+        details: {
+          action: 'grant_page_permission_to_role',
+          roleId: req.params.roleId,
+        },
+      });
+      next(error);
+    }
+  }
 }

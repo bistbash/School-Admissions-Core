@@ -16,9 +16,9 @@ export async function isIPBlocked(ipAddress: string, userId?: number): Promise<b
   if (userId) {
     try {
       // Use dynamic import to get the latest Prisma Client instance
-      const { prisma: prismaClient } = await import('./prisma');
+      const { prisma: prismaClient } = await import('../database/prisma');
       const soldier = await retryPrismaOperation(async () => {
-        const client = await import('./prisma').then(m => m.prisma);
+        const client = await import('../database/prisma').then(m => m.prisma);
         return client.soldier.findUnique({
           where: { id: userId },
           select: { isAdmin: true },
@@ -55,7 +55,7 @@ export async function isIPBlocked(ipAddress: string, userId?: number): Promise<b
   try {
     const blocked = await retryPrismaOperation(async () => {
       // Get fresh Prisma Client instance
-      const { prisma: prismaClient } = await import('./prisma');
+      const { prisma: prismaClient } = await import('../database/prisma');
       return prismaClient.blockedIP.findFirst({
         where: {
           ipAddress,
@@ -159,7 +159,7 @@ export async function ipBlockingMiddleware(
       const isBlocked = await isIPBlocked(ipAddress, userId);
       if (isBlocked) {
         // Log the blocked attempt
-        const { auditFromRequest } = await import('./audit');
+        const { auditFromRequest } = await import('../audit/audit');
         await auditFromRequest(req, 'UNAUTHORIZED_ACCESS', 'SYSTEM', {
           status: 'FAILURE',
           errorMessage: 'IP address is blocked',

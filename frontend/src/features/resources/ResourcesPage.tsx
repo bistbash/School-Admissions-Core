@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Users, Building2, DoorOpen, Plus, Edit, Trash2, Search as SearchIcon, KeyRound, Save, Badge, Eye } from 'lucide-react';
+import { Users, Building2, DoorOpen, Plus, Edit, Trash2, Search as SearchIcon, KeyRound, Save, Badge, Eye, Shield } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../shared/ui/Card';
 import { Button } from '../../shared/ui/Button';
 import { Input } from '../../shared/ui/Input';
 import { apiClient } from '../../shared/lib/api';
 import { useAuth } from '../auth/AuthContext';
 import { cn } from '../../shared/lib/utils';
+import { PermissionManagerModal } from './PermissionManagerModal';
 
 type Tab = 'users' | 'departments' | 'rooms' | 'roles';
 
@@ -51,13 +52,15 @@ export function ResourcesPage() {
         default:
           return <UsersTab action={actionParam} />;
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error rendering tab content:', error);
       return (
         <Card variant="default">
           <CardContent className="py-12">
             <div className="text-center text-red-600 dark:text-red-400">
-              שגיאה בטעינת התוכן. אנא רענן את הדף.
+              שגיאה בטעינת התוכן: {error?.message || 'שגיאה לא ידועה'}
+              <br />
+              אנא רענן את הדף.
             </div>
           </CardContent>
         </Card>
@@ -136,6 +139,8 @@ function UsersTab({ action }: { action?: string | null }) {
   const [editFormData, setEditFormData] = useState<any>({});
   const [isUpdating, setIsUpdating] = useState(false);
   const [viewingPendingUser, setViewingPendingUser] = useState<any | null>(null);
+  const [permissionManagerOpen, setPermissionManagerOpen] = useState(false);
+  const [selectedUserForPermissions, setSelectedUserForPermissions] = useState<any | null>(null);
 
   useEffect(() => {
     loadData();
@@ -786,6 +791,18 @@ function UsersTab({ action }: { action?: string | null }) {
                       <Button
                         size="sm"
                         variant="outline"
+                        onClick={() => {
+                          setSelectedUserForPermissions(user);
+                          setPermissionManagerOpen(true);
+                        }}
+                        className="text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300"
+                        title="נהל הרשאות"
+                      >
+                        <Shield className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
                         onClick={() => handleEditUser(user)}
                       >
                         <Edit className="h-4 w-4" />
@@ -814,6 +831,20 @@ function UsersTab({ action }: { action?: string | null }) {
           </div>
         </CardContent>
       </Card>
+
+      {/* Permission Manager Modal */}
+      {selectedUserForPermissions && permissionManagerOpen && (
+        <PermissionManagerModal
+          isOpen={permissionManagerOpen}
+          onClose={() => {
+            setPermissionManagerOpen(false);
+            setSelectedUserForPermissions(null);
+          }}
+          type="user"
+          targetId={selectedUserForPermissions.id}
+          targetName={selectedUserForPermissions.name || selectedUserForPermissions.email}
+        />
+      )}
     </div>
   );
 }
@@ -1263,6 +1294,8 @@ function RolesTab({ action }: { action?: string | null }) {
   const [formData, setFormData] = useState({ name: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [permissionManagerOpen, setPermissionManagerOpen] = useState(false);
+  const [selectedRoleForPermissions, setSelectedRoleForPermissions] = useState<any | null>(null);
   const { user } = useAuth();
 
   if (!user) {
@@ -1433,6 +1466,18 @@ function RolesTab({ action }: { action?: string | null }) {
                       <Button
                         size="sm"
                         variant="outline"
+                        onClick={() => {
+                          setSelectedRoleForPermissions(role);
+                          setPermissionManagerOpen(true);
+                        }}
+                        className="text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300"
+                        title="נהל הרשאות"
+                      >
+                        <Shield className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
                         onClick={() => handleEdit(role)}
                       >
                         <Edit className="h-4 w-4" />
@@ -1452,6 +1497,20 @@ function RolesTab({ action }: { action?: string | null }) {
           </div>
         </CardContent>
       </Card>
+
+      {/* Permission Manager Modal */}
+      {selectedRoleForPermissions && permissionManagerOpen && (
+        <PermissionManagerModal
+          isOpen={permissionManagerOpen}
+          onClose={() => {
+            setPermissionManagerOpen(false);
+            setSelectedRoleForPermissions(null);
+          }}
+          type="role"
+          targetId={selectedRoleForPermissions.id}
+          targetName={selectedRoleForPermissions.name}
+        />
+      )}
     </div>
   );
 }

@@ -5,7 +5,8 @@ import { usePermissions } from './PermissionsContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../shared/ui/Card';
 import { Button } from '../../shared/ui/Button';
 import { Input } from '../../shared/ui/Input';
-import { Shield, User, Users, Plus, X } from 'lucide-react';
+import { Shield, User, Users, Plus, X, FileText } from 'lucide-react';
+import { PagePermissionsManager } from './PagePermissionsManager';
 
 interface Permission {
   id: number;
@@ -35,6 +36,7 @@ export function PermissionsPage() {
   const [users, setUsers] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeView, setActiveView] = useState<'pages' | 'permissions'>('pages');
 
   useEffect(() => {
     loadData();
@@ -146,6 +148,28 @@ export function PermissionsPage() {
         </p>
       </div>
 
+      {/* View Toggle */}
+      <div className="flex gap-2 border-b border-gray-200 dark:border-[#333333]">
+        <Button
+          variant={activeView === 'pages' ? 'default' : 'ghost'}
+          onClick={() => setActiveView('pages')}
+        >
+          <FileText className="h-4 w-4 mr-2" />
+          הרשאות דפים
+        </Button>
+        <Button
+          variant={activeView === 'permissions' ? 'default' : 'ghost'}
+          onClick={() => setActiveView('permissions')}
+        >
+          <Shield className="h-4 w-4 mr-2" />
+          הרשאות API
+        </Button>
+      </div>
+
+      {activeView === 'pages' ? (
+        <PagePermissionsManager />
+      ) : (
+        <>
       {isLoading ? (
         <div className="flex items-center justify-center py-12">
           <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-300 dark:border-[#333333] border-t-gray-900 dark:border-t-[#FAFAFA]"></div>
@@ -312,6 +336,8 @@ export function PermissionsPage() {
               </div>
             </CardContent>
           </Card>
+            </>
+          )}
         </>
       )}
     </div>

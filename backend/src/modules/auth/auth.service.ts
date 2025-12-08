@@ -99,6 +99,17 @@ export class AuthService {
           createdBy: soldier.id,
         });
         console.log(`✅ First user created as admin: ${soldier.email} (ID: ${soldier.id})`);
+
+        // Ensure admin has all permissions (optional - admins bypass permission checks anyway)
+        // But this ensures permissions exist in DB for consistency
+        try {
+          const { ensureAdminPermissions } = await import('../../lib/permissions/ensure-admin-permissions');
+          await ensureAdminPermissions();
+          console.log(`✅ Admin permissions ensured for: ${soldier.email}`);
+        } catch (permError) {
+          // Non-critical - admins bypass permission checks anyway
+          console.warn('Failed to ensure admin permissions (non-critical):', permError);
+        }
       } catch (error) {
         console.error('Failed to add admin to trusted users:', error);
       }
@@ -421,6 +432,17 @@ export class AuthService {
         // Explicitly exclude password
       },
     });
+
+    // Grant minimal permissions to approved user (dashboard view)
+    try {
+      const { PermissionsService } = await import('../permissions/permissions.service');
+      const permissionsService = new PermissionsService();
+      await permissionsService.grantPagePermission(userId, 'dashboard', 'view', approvedBy);
+      console.log(`✅ Granted minimal permissions (dashboard view) to approved user: ${updated.email} (ID: ${userId})`);
+    } catch (permError) {
+      // Non-critical - log but don't fail the approval
+      console.warn(`Failed to grant minimal permissions to approved user ${updated.email}:`, permError);
+    }
 
     return updated;
   }

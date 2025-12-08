@@ -217,6 +217,7 @@ export const permissionPolicies: Record<string, PermissionPolicy> = {
 
 /**
  * Check permission with policy enforcement
+ * Admins always have all permissions and bypass all policies
  */
 export async function hasPermissionWithPolicy(
   userId: number,
@@ -225,13 +226,7 @@ export async function hasPermissionWithPolicy(
   context?: Partial<PermissionContext>,
   resource?: any
 ): Promise<boolean> {
-  // First check basic permission
-  const hasPermission = await hasScopedPermission(userId, permissionString, context);
-  if (!hasPermission) {
-    return false;
-  }
-
-  // Get full context
+  // Get full context first to check if user is admin
   const user = await prisma.soldier.findUnique({
     where: { id: userId },
   });
@@ -240,18 +235,26 @@ export async function hasPermissionWithPolicy(
     return false;
   }
 
+  const userIsAdmin = (user as any).isAdmin ?? false;
+
+  // Admins have all permissions and bypass all policies
+  if (userIsAdmin) {
+    return true;
+  }
+
+  // First check basic permission
+  const hasPermission = await hasScopedPermission(userId, permissionString, context);
+  if (!hasPermission) {
+    return false;
+  }
+
   const fullContext: PermissionContext = {
     userId: user.id,
     departmentId: context?.departmentId ?? user.departmentId ?? null,
     roleId: context?.roleId ?? user.roleId ?? null,
     isCommander: context?.isCommander ?? user.isCommander ?? false,
-    isAdmin: (user as any).isAdmin ?? false,
+    isAdmin: userIsAdmin,
   };
-
-  // Admins bypass policies
-  if (fullContext.isAdmin) {
-    return true;
-  }
 
   // Apply policies
   for (const policyName of policies) {

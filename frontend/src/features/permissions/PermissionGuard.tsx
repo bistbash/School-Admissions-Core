@@ -1,11 +1,14 @@
 import React from 'react';
 import { usePermissions } from './PermissionsContext';
+import { useAuth } from '../auth/AuthContext';
 import { Error403Page } from '../errors/Error403Page';
 
 interface PermissionGuardProps {
   permission?: string;
   resource?: string;
   action?: string;
+  page?: string;
+  pageAction?: 'view' | 'edit';
   fallback?: React.ReactNode;
   children: React.ReactNode;
 }
@@ -26,14 +29,33 @@ export function PermissionGuard({
   permission, 
   resource, 
   action, 
+  page,
+  pageAction,
   fallback = null, 
   children 
 }: PermissionGuardProps) {
-  const { hasPermission, hasResourcePermission } = usePermissions();
+  const { hasPermission, hasResourcePermission, hasPagePermission, isLoading } = usePermissions();
+  const { user } = useAuth();
+
+  // Show loading state while permissions are loading
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 dark:border-[#FAFAFA]"></div>
+      </div>
+    );
+  }
+
+  // Admins always have access
+  if (user?.isAdmin) {
+    return <>{children}</>;
+  }
 
   let hasAccess = false;
 
-  if (permission) {
+  if (page && pageAction) {
+    hasAccess = hasPagePermission(page, pageAction);
+  } else if (permission) {
     hasAccess = hasPermission(permission);
   } else if (resource && action) {
     hasAccess = hasResourcePermission(resource, action);

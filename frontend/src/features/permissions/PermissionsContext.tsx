@@ -15,11 +15,19 @@ export interface Permission {
   };
 }
 
+export interface PagePermission {
+  page: string;
+  view: boolean;
+  edit: boolean;
+}
+
 interface PermissionsContextType {
   permissions: Permission[];
+  pagePermissions: Record<string, PagePermission>;
   isLoading: boolean;
   hasPermission: (permissionName: string) => boolean;
   hasResourcePermission: (resource: string, action: string) => boolean;
+  hasPagePermission: (page: string, action: 'view' | 'edit') => boolean;
   refreshPermissions: () => Promise<void>;
 }
 
@@ -28,19 +36,26 @@ const PermissionsContext = createContext<PermissionsContextType | undefined>(und
 export function PermissionsProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const [permissions, setPermissions] = useState<Permission[]>([]);
+  const [pagePermissions, setPagePermissions] = useState<Record<string, PagePermission>>({});
   const [isLoading, setIsLoading] = useState(true);
+  const [hasError, setHasError] = useState(false);
 
   const loadPermissions = useCallback(async () => {
     if (!user) {
       setPermissions([]);
+      setPagePermissions({});
       setIsLoading(false);
       return;
     }
 
     try {
-      const response = await apiClient.get('/permissions/my-permissions');
-      // Transform the response to match our Permission interface
-      const transformedPermissions: Permission[] = response.data.map((item: any) => ({
+      // Load permissions separately to handle errors gracefully
+      let permissionsData: Permission[] = [];
+      let pagePermissionsData: Record<string, PagePermission> = {};
+
+      try {
+        const permissionsRes = await apiClient.get('/permissions/my-permissions');
+        permissionsData = permissionsRes.data.map((item: any) => ({
         id: item.permission.id,
         name: item.permission.name,
         description: item.permission.description,
@@ -49,10 +64,28 @@ export function PermissionsProvider({ children }: { children: React.ReactNode })
         source: item.source,
         role: item.role,
       }));
-      setPermissions(transformedPermissions);
+      } catch (error) {
+        console.warn('Failed to load permissions (non-critical):', error);
+        // Continue even if permissions fail
+      }
+
+      try {
+        const pagePermissionsRes = await apiClient.get('/permissions/my-page-permissions');
+        pagePermissionsData = pagePermissionsRes.data || {};
+      } catch (error) {
+        console.warn('Failed to load page permissions (non-critical):', error);
+        // Continue even if page permissions fail - admins will still work
+      }
+
+      setPermissions(permissionsData);
+      setPagePermissions(pagePermissionsData);
+      setHasError(false);
     } catch (error) {
       console.error('Failed to load permissions:', error);
       setPermissions([]);
+      setPagePermissions({});
+      setHasError(true);
+      // Don't block the app - continue with empty permissions
     } finally {
       setIsLoading(false);
     }
@@ -76,13 +109,28 @@ export function PermissionsProvider({ children }: { children: React.ReactNode })
     return permissions.some(p => p.resource === resource && p.action === action);
   }, [user, permissions]);
 
+  const hasPagePermission = useCallback((page: string, action: 'view' | 'edit'): boolean => {
+    if (!user) return false;
+    // Admins have all permissions
+    if (user.isAdmin) return true;
+    const pagePerm = pagePermissions[page];
+    if (!pagePerm) return false;
+    // Edit permission includes view
+    if (action === 'view') {
+      return pagePerm.view || pagePerm.edit;
+    }
+    return pagePerm.edit;
+  }, [user, pagePermissions]);
+
   return (
     <PermissionsContext.Provider
       value={{
         permissions,
+        pagePermissions,
         isLoading,
         hasPermission,
         hasResourcePermission,
+        hasPagePermission,
         refreshPermissions: loadPermissions,
       }}
     >

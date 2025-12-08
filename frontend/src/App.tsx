@@ -127,13 +127,40 @@ function AppRoutes() {
         }
       >
         <Route index element={<Navigate to="/dashboard" replace />} />
-        <Route path="dashboard" element={<ErrorHandler><DashboardPage /></ErrorHandler>} />
-        <Route path="resources" element={<ErrorHandler><ResourcesPage /></ErrorHandler>} />
-        <Route path="permissions" element={<ErrorHandler><PermissionsPage /></ErrorHandler>} />
+        <Route 
+          path="dashboard" 
+          element={
+            <PermissionGuard page="dashboard" pageAction="view" fallback={<Error403Page />}>
+              <ErrorHandler>
+                <DashboardPage />
+              </ErrorHandler>
+            </PermissionGuard>
+          } 
+        />
+        <Route 
+          path="resources" 
+          element={
+            <PermissionGuard page="resources" pageAction="view" fallback={<Error403Page />}>
+              <ErrorHandler>
+                <ResourcesPage />
+              </ErrorHandler>
+            </PermissionGuard>
+          } 
+        />
+        <Route 
+          path="permissions" 
+          element={
+            <PermissionGuard page="permissions" pageAction="view" fallback={<Error403Page />}>
+              <ErrorHandler>
+                <PermissionsPage />
+              </ErrorHandler>
+            </PermissionGuard>
+          } 
+        />
         <Route 
           path="soc" 
           element={
-            <PermissionGuard permission="soc.read" fallback={<Error403Page />}>
+            <PermissionGuard page="soc" pageAction="view" fallback={<Error403Page />}>
               <ErrorHandler>
                 <SOCPage />
               </ErrorHandler>
@@ -143,12 +170,23 @@ function AppRoutes() {
         <Route 
           path="api" 
           element={
+            <PermissionGuard page="api-keys" pageAction="view" fallback={<Error403Page />}>
             <ErrorHandler>
               <APIPage />
             </ErrorHandler>
+            </PermissionGuard>
           } 
         />
-        <Route path="students" element={<ErrorHandler><div>Students Page - Coming Soon</div></ErrorHandler>} />
+        <Route 
+          path="students" 
+          element={
+            <PermissionGuard page="students" pageAction="view" fallback={<Error403Page />}>
+              <ErrorHandler>
+                <div>Students Page - Coming Soon</div>
+              </ErrorHandler>
+            </PermissionGuard>
+          } 
+        />
         <Route path="settings" element={<ErrorHandler><div>Settings Page - Coming Soon</div></ErrorHandler>} />
       </Route>
       {/* Error pages */}
@@ -165,11 +203,13 @@ function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
+        <ErrorHandler>
         <PermissionsProvider>
           <BrowserRouter>
             <AppRoutes />
           </BrowserRouter>
         </PermissionsProvider>
+        </ErrorHandler>
       </AuthProvider>
     </ThemeProvider>
   );

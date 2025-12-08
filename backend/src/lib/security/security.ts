@@ -147,7 +147,7 @@ export async function requireAdmin(req: Request, res: Response, next: NextFuncti
     }
 
     // Check if user is admin
-    const { prisma } = await import('./prisma');
+    const { prisma } = await import('../database/prisma');
     const soldier = await prisma.soldier.findUnique({
       where: { id: userId },
       select: { isAdmin: true },
@@ -271,7 +271,7 @@ export const fileUploadRateLimiter = rateLimit({
     let isAdmin = false;
     if (user?.userId) {
       try {
-        const { prisma } = await import('./prisma');
+        const { prisma } = await import('../database/prisma');
         const soldier = await prisma.soldier.findUnique({
           where: { id: user.userId },
           select: { isAdmin: true },
@@ -296,7 +296,7 @@ export const fileUploadRateLimiter = rateLimit({
     const user = (req as any).user;
     if (user?.userId) {
       try {
-        const { prisma } = await import('./prisma');
+        const { prisma } = await import('../database/prisma');
         const soldier = await prisma.soldier.findUnique({
           where: { id: user.userId },
           select: { isAdmin: true },
@@ -374,7 +374,7 @@ export const loginRateLimiter = rateLimit({
     let isAdmin = false;
     if (user?.userId) {
       try {
-        const { prisma } = await import('./prisma');
+        const { prisma } = await import('../database/prisma');
         const soldier = await prisma.soldier.findUnique({
           where: { id: user.userId },
           select: { isAdmin: true },

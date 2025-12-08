@@ -13,7 +13,9 @@
     "prisma:studio": "prisma studio",
     "unblock-ip": "tsx scripts/unblock-ip.ts",
     "unblock-all": "tsx scripts/unblock-all-ips.ts",
-    "list-blocked": "tsx scripts/list-blocked-ips.ts"
+    "list-blocked": "tsx scripts/list-blocked-ips.ts",
+    "seed-permissions": "tsx src/lib/permissions/seed-permissions.ts",
+    "ensure-admin-permissions": "tsx src/lib/permissions/ensure-admin-permissions.ts"
   },
   "keywords": [],
   "author": "",
