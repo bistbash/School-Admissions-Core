@@ -34,13 +34,18 @@ interface PermissionsContextType {
 const PermissionsContext = createContext<PermissionsContextType | undefined>(undefined);
 
 export function PermissionsProvider({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const [permissions, setPermissions] = useState<Permission[]>([]);
   const [pagePermissions, setPagePermissions] = useState<Record<string, PagePermission>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
 
   const loadPermissions = useCallback(async () => {
+    // Wait for auth to finish loading before checking permissions
+    if (authLoading) {
+      return;
+    }
+
     if (!user) {
       setPermissions([]);
       setPagePermissions({});
@@ -89,7 +94,7 @@ export function PermissionsProvider({ children }: { children: React.ReactNode })
     } finally {
       setIsLoading(false);
     }
-  }, [user]);
+  }, [user, authLoading]);
 
   useEffect(() => {
     loadPermissions();
@@ -127,7 +132,8 @@ export function PermissionsProvider({ children }: { children: React.ReactNode })
       value={{
         permissions,
         pagePermissions,
-        isLoading,
+        // Keep loading state true while auth is loading to prevent premature permission checks
+        isLoading: isLoading || authLoading,
         hasPermission,
         hasResourcePermission,
         hasPagePermission,

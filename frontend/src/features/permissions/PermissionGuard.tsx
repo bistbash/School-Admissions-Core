@@ -29,11 +29,12 @@ export function PermissionGuard({
   fallback = null, 
   children 
 }: PermissionGuardProps) {
-  const { hasPagePermission, isLoading } = usePermissions();
-  const { user } = useAuth();
+  const { hasPagePermission, isLoading: permissionsLoading } = usePermissions();
+  const { user, isLoading: authLoading } = useAuth();
 
-  // Show loading state while permissions are loading
-  if (isLoading) {
+  // Show loading state while permissions or auth are loading
+  // This prevents showing 403 error before auth state is fully loaded
+  if (permissionsLoading || authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 dark:border-[#FAFAFA]"></div>
@@ -41,8 +42,14 @@ export function PermissionGuard({
     );
   }
 
+  // If no user, don't show 403 - let ProtectedRoute handle the redirect
+  // This prevents flashing 403 during auth state initialization
+  if (!user) {
+    return null;
+  }
+
   // Admins always have access
-  if (user?.isAdmin) {
+  if (user.isAdmin) {
     return <>{children}</>;
   }
 
