@@ -23,7 +23,10 @@ import {
   Shield,
   ChevronDown,
   ChevronUp,
-  Sparkles
+  Sparkles,
+  Mail,
+  MessageSquare,
+  UserCog
 } from 'lucide-react';
 import { cn } from '../../shared/lib/utils';
 
@@ -64,7 +67,7 @@ interface APIEndpointGroup {
 
 export function APIPage() {
   const { user } = useAuth();
-  const { hasPermission, hasResourcePermission, isLoading: permissionsLoading } = usePermissions();
+  const { hasPermission, hasResourcePermission, hasPagePermission, isLoading: permissionsLoading } = usePermissions();
   const [apiKeys, setApiKeys] = useState<APIKey[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
@@ -263,6 +266,8 @@ export function APIPage() {
           method: 'POST',
           path: '/auth/complete-profile',
           description: 'השלמת פרופיל משתמש',
+          resource: 'auth',
+          action: 'complete-profile',
           requiresAdmin: false,
           exampleRequest: JSON.stringify({ personalNumber: '123456789', name: 'שם', type: 'CONSCRIPT', departmentId: 1, newPassword: 'newpassword' }, null, 2),
         },
@@ -319,23 +324,31 @@ export function APIPage() {
           method: 'POST',
           path: '/api-keys',
           description: 'יצירת מפתח API חדש',
+          resource: 'api-keys',
+          action: 'create',
           exampleRequest: JSON.stringify({ name: 'My API Key', expiresAt: '2026-12-31T23:59:59Z' }, null, 2),
         },
         {
           method: 'GET',
           path: '/api-keys',
           description: 'קבלת מפתחות API של המשתמש',
+          resource: 'api-keys',
+          action: 'read',
         },
         {
           method: 'GET',
           path: '/api-keys/all',
           description: 'קבלת כל מפתחות ה-API (מנהל בלבד)',
+          resource: 'api-keys',
+          action: 'read',
           requiresAdmin: true,
         },
         {
           method: 'DELETE',
           path: '/api-keys/:id',
           description: 'מחיקת מפתח API',
+          resource: 'api-keys',
+          action: 'delete',
         },
       ],
     },
@@ -949,16 +962,57 @@ export function APIPage() {
           return user.isAdmin || hasPermission(endpoint.requiredPermission);
         }
         
-        // Resource-based permission
+        // Resource-based permission - check via page permissions for better accuracy
         if (endpoint.resource && endpoint.action) {
-          return user.isAdmin || hasResourcePermission(endpoint.resource, endpoint.action);
+          if (user.isAdmin) return true;
+          
+          // Special handling for auth/complete-profile - only for CREATED/PENDING users
+          if (endpoint.resource === 'auth' && endpoint.action === 'complete-profile') {
+            // Show only if user is CREATED or PENDING (needs profile completion)
+            return user.approvalStatus === 'CREATED' || user.approvalStatus === 'PENDING';
+          }
+          
+          // Check if this is an API Keys endpoint that requires edit permission
+          if (endpoint.resource === 'api-keys' && (endpoint.action === 'create' || endpoint.action === 'delete')) {
+            // POST /api-keys (create) and DELETE /api/api-keys/:id (delete) require edit permission
+            return hasPagePermission('api-keys', 'edit');
+          }
+          
+          // For other endpoints, check resource:action permission or page permission
+          // Try page permission first (more accurate)
+          const pageMap: Record<string, string> = {
+            'students': 'students',
+            'api-keys': 'api-keys',
+            'soc': 'soc',
+            'cohorts': 'cohorts',
+            'classes': 'classes',
+            'student-exits': 'student-exits',
+            'tracks': 'tracks',
+            'search': 'dashboard', // Search endpoints are part of dashboard page
+            'dashboard': 'dashboard', // Dashboard endpoints
+          };
+          
+          const pageName = pageMap[endpoint.resource];
+          if (pageName) {
+            // For edit actions (create, update, delete), check edit permission
+            if (endpoint.action === 'create' || endpoint.action === 'update' || endpoint.action === 'delete') {
+              return hasPagePermission(pageName, 'edit');
+            }
+            // For read actions, check view permission (edit includes view)
+            if (endpoint.action === 'read') {
+              return hasPagePermission(pageName, 'view');
+            }
+          }
+          
+          // Fallback to resource:action permission check
+          return hasResourcePermission(endpoint.resource, endpoint.action);
         }
         
         // Default: show if authenticated
         return true;
       }),
     })).filter(group => group.endpoints.length > 0);
-  }, [user, allAPIGroups, hasPermission, hasResourcePermission, permissionsLoading]);
+  }, [user, allAPIGroups, hasPermission, hasResourcePermission, hasPagePermission, permissionsLoading]);
 
   const toggleGroup = (title: string) => {
     const newExpanded = new Set(expandedGroups);
@@ -1517,49 +1571,109 @@ export function APIPage() {
         )}
       </Card>
 
-      {/* Create New Key */}
-      <Card variant="elevated">
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 dark:from-blue-600 dark:to-purple-700">
-              <Key className="h-5 w-5 text-white" />
+      {/* Create New Key or Permission Required Message */}
+      {hasPagePermission('api-keys', 'edit') ? (
+        <Card variant="elevated">
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 dark:from-blue-600 dark:to-purple-700">
+                <Key className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <CardTitle className="text-lg">יצירת מפתח API חדש</CardTitle>
+                <CardDescription className="mt-1">
+                  צור מפתח API חדש לגישה ל-API של המערכת
+                </CardDescription>
+              </div>
             </div>
-            <div>
-              <CardTitle className="text-lg">יצירת מפתח API חדש</CardTitle>
-              <CardDescription className="mt-1">
-                צור מפתח API חדש לגישה ל-API של המערכת
-              </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleCreateKey} className="space-y-5">
+              <Input
+                label="שם המפתח"
+                value={newKeyName}
+                onChange={(e) => setNewKeyName(e.target.value)}
+                placeholder="לדוגמה: Production API Key"
+                required
+              />
+              <Input
+                label="תאריך תפוגה (אופציונלי)"
+                type="datetime-local"
+                value={newKeyExpiresAt}
+                onChange={(e) => setNewKeyExpiresAt(e.target.value)}
+                helperText="אם לא מוגדר, המפתח לא יפוג"
+              />
+              <Button 
+                type="submit" 
+                isLoading={isCreating} 
+                className="w-full sm:w-auto bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 shadow-lg hover:shadow-xl transition-all duration-200"
+                size="lg"
+              >
+                <Key className="h-4 w-4" />
+                צור מפתח חדש
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card variant="elevated" className="border-blue-200 dark:border-blue-800/50">
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-900/40 dark:to-indigo-900/40">
+                <Lock className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div className="flex-1">
+                <CardTitle className="text-lg text-gray-900 dark:text-gray-100">
+                  יצירת מפתח API
+                </CardTitle>
+                <CardDescription className="mt-1 text-gray-600 dark:text-gray-400">
+                  דורש הרשאת עריכה לדף מפתחות API
+                </CardDescription>
+              </div>
             </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleCreateKey} className="space-y-5">
-            <Input
-              label="שם המפתח"
-              value={newKeyName}
-              onChange={(e) => setNewKeyName(e.target.value)}
-              placeholder="לדוגמה: Production API Key"
-              required
-            />
-            <Input
-              label="תאריך תפוגה (אופציונלי)"
-              type="datetime-local"
-              value={newKeyExpiresAt}
-              onChange={(e) => setNewKeyExpiresAt(e.target.value)}
-              helperText="אם לא מוגדר, המפתח לא יפוג"
-            />
-            <Button 
-              type="submit" 
-              isLoading={isCreating} 
-              className="w-full sm:w-auto bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 shadow-lg hover:shadow-xl transition-all duration-200"
-              size="lg"
-            >
-              <Key className="h-4 w-4" />
-              צור מפתח חדש
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+          </CardHeader>
+          <CardContent>
+            <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-blue-950/20 dark:via-indigo-950/20 dark:to-purple-950/20 border border-blue-200/50 dark:border-blue-800/30 p-6">
+              {/* Decorative background pattern */}
+              <div className="absolute inset-0 opacity-5 dark:opacity-10">
+                <div className="absolute top-0 left-0 w-32 h-32 bg-blue-500 rounded-full blur-3xl"></div>
+                <div className="absolute bottom-0 right-0 w-40 h-40 bg-indigo-500 rounded-full blur-3xl"></div>
+              </div>
+              
+              <div className="relative flex flex-col sm:flex-row items-start gap-5">
+                <div className="shrink-0">
+                  <div className="p-3 rounded-xl bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border border-blue-200/50 dark:border-blue-700/50 shadow-sm">
+                    <UserCog className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                  </div>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-2 text-base flex items-center gap-2">
+                    <Shield className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                    הרשאה נדרשת
+                  </h3>
+                  <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed mb-4">
+                    כדי ליצור מפתחות API, אתה צריך הרשאת עריכה לדף <span className="font-medium text-gray-900 dark:text-gray-100">מפתחות API</span>.
+                    הרשאה זו ניתנת בדרך כלל למפתחים ולמשתמשים שמתאימים לניהול גישות API.
+                  </p>
+                  <div className="mt-4 p-4 rounded-lg bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm border border-blue-200/50 dark:border-blue-700/50">
+                    <div className="flex items-start gap-3">
+                      <MessageSquare className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">
+                          איך לקבל הרשאה?
+                        </p>
+                        <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+                          פנה למנהל המערכת שלך ובקש הרשאת עריכה לדף מפתחות API. לאחר קבלת ההרשאה, תוכל ליצור ולנהל מפתחות API.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Created Key Modal */}
       <Modal
@@ -1750,10 +1864,31 @@ export function APIPage() {
             </div>
           ) : apiKeys.length === 0 ? (
             <div className="text-center py-12">
-              <Key className="h-12 w-12 text-gray-400 dark:text-gray-600 mx-auto mb-4" />
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                אין מפתחות API. צור מפתח חדש כדי להתחיל.
-              </p>
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 dark:bg-gray-800 mb-4">
+                <Key className="h-8 w-8 text-gray-400 dark:text-gray-600" />
+              </div>
+              {hasPagePermission('api-keys', 'edit') ? (
+                <div className="space-y-2">
+                  <p className="text-base font-medium text-gray-900 dark:text-gray-100">
+                    אין מפתחות API
+                  </p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    צור מפתח חדש כדי להתחיל להשתמש ב-API של המערכת
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3 max-w-md mx-auto">
+                  <p className="text-base font-medium text-gray-900 dark:text-gray-100">
+                    אין מפתחות API
+                  </p>
+                  <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/50">
+                    <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0" />
+                    <p className="text-sm text-blue-700 dark:text-blue-300">
+                      כדי ליצור מפתחות API, פנה למנהל המערכת לקבלת הרשאת עריכה
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

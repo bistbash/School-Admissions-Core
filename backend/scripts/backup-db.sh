@@ -57,3 +57,4 @@ else
     echo "Error: Database backup failed"
     exit 1
 fi
+

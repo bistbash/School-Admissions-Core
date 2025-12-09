@@ -22,7 +22,7 @@ const PAGE_EDIT_MODE_SUPPORT: Record<string, boolean> = {
   'dashboard': false, // לוח בקרה - צפייה בלבד
   'students': true, // תלמידים - יש מצב עריכה
   'resources': true, // ניהול משאבים - יש מצב עריכה
-  'soc': false, // מרכז אבטחה - צפייה בלבד
+  'soc': true, // מרכז אבטחה - יש מצב עריכה (עדכון אירועי אבטחה)
   'api-keys': true, // מפתחות API - יש מצב עריכה
   'settings': false, // הגדרות - צפייה בלבד
 };
@@ -57,17 +57,15 @@ export function PageModeProvider({ children }: { children: React.ReactNode }) {
   // Only check edit permission if permissions are loaded
   const canEdit = !permissionsLoading && hasPagePermission(currentPage, 'edit');
 
-  // Reset to view mode when page changes
+  // Auto-set mode based on permissions: if user has edit permission, start in edit mode
+  // Otherwise, stay in view mode
   useEffect(() => {
-    setModeState('view');
-  }, [currentPage]);
-
-  // Auto-switch to view mode if user doesn't have edit permission
-  useEffect(() => {
-    if (mode === 'edit' && !canEdit) {
+    if (canEdit && supportsEditMode) {
+      setModeState('edit');
+    } else {
       setModeState('view');
     }
-  }, [mode, canEdit]);
+  }, [currentPage, canEdit, supportsEditMode]);
 
   const setMode = useCallback((newMode: PageMode) => {
     if (newMode === 'edit' && !canEdit) {

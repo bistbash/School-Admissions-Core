@@ -1,241 +1,710 @@
-# School Admissions Core
+# School Admissions Core - מערכת ניהול בית ספר
 
-A full-stack application for managing military resources (soldiers, departments, roles, and rooms) with a React frontend and Express backend.
+מערכת מלאה ומקצועית לניהול תלמידים, מחזורים, מגמות, כיתות וכל משאבי בית הספר, עם מערכת הרשאות מתקדמת ואבטחה ברמה ארגונית.
 
-## Features
+---
 
-- ✅ **Secure Authentication** - JWT-based authentication with bcrypt password hashing
-- ✅ **API Keys** - Secure API key authentication for programmatic access
-- ✅ **User Registration & Login** - Secure user registration and login system
-- ✅ **Audit Logging** - Comprehensive audit trail of all system activities
-- ✅ **SOC API** - Security Operations Center API for monitoring and analysis
-- ✅ **IP Blocking** - Block malicious IP addresses automatically
-- ✅ **Incident Management** - SOC Analyst tools for managing security events
-- ✅ CRUD operations for Soldiers, Departments, Roles, and Rooms
-- ✅ Input validation with Zod
-- ✅ Type-safe API with TypeScript
-- ✅ Error handling middleware
-- ✅ RTL (Right-to-Left) Hebrew UI support
-- ✅ Edit functionality for all resources
-- ✅ Protected routes requiring authentication
+## 📋 תוכן עניינים
 
-## Tech Stack
+- [סקירה כללית](#סקירה-כללית)
+- [תכונות עיקריות](#תכונות-עיקריות)
+- [התקנה והפעלה (למתכנתים)](#התקנה-והפעלה-למתכנתים)
+- [מדריך למשתמש](#מדריך-למשתמש)
+- [מערכת הרשאות](#מערכת-הרשאות)
+- [מערכת אבטחה](#מערכת-אבטחה)
+- [API Documentation](#api-documentation)
+- [מבנה הפרויקט](#מבנה-הפרויקט)
 
-### Backend
-- **Node.js** with **Express**
-- **TypeScript**
-- **Prisma** ORM with SQLite
-- **Zod** for validation
-- **bcrypt** for password hashing
-- **jsonwebtoken** for JWT authentication
+---
 
-### Frontend
-- **React 19** with **TypeScript**
-- **Vite** for build tooling
-- **Tailwind CSS** for styling
-- **Axios** for API calls
+## סקירה כללית
 
-## Getting Started
+מערכת **School Admissions Core** היא מערכת ניהול מקיפה המיועדת לבתי ספר, המספקת:
 
-### Prerequisites
-- Node.js 18+ and npm
-- Git
+- **ניהול תלמידים מלא** - רישום, עדכון, מעקב אחר מחזורים, מגמות וכיתות
+- **מערכת הרשאות מתקדמת** - Page-based permissions עם תמיכה ב-view/edit modes
+- **אבטחה ברמה ארגונית** - JWT authentication, API Keys, SOC logging, IP blocking
+- **מרכז אבטחה (SOC)** - ניטור, ניתוח, וניהול אירועי אבטחה
+- **API מקצועי** - RESTful API מלא עם תיעוד דינמי
+- **ממשק משתמש מודרני** - React 19 עם Tailwind CSS, תמיכה מלאה בעברית (RTL)
+
+---
+
+## תכונות עיקריות
+
+### 🎓 ניהול תלמידים
+- רישום ועדכון תלמידים
+- העלאה מאקסל (ממחשוב)
+- ניהול מחזורים (cohorts) - נוצרים אוטומטית מ-1973 עד השנה הנוכחית + 1
+- ניהול מגמות (tracks)
+- ניהול כיתות (classes)
+- מעקב אחר יציאות תלמידים
+
+### 🔐 מערכת הרשאות מתקדמת
+- **Page-based permissions** - הרשאות ברמת דף (view/edit)
+- **אוטומטיות** - קבלת הרשאת דף מעניקה אוטומטית הרשאות ל-API endpoints הקשורים
+- **Roles & Users** - הרשאות דרך תפקידים או ישירות למשתמש
+- **Admin override** - מנהלי מערכת מקבלים גישה מלאה
+- **Mode switching** - צפייה/עריכה אוטומטית לפי הרשאות
+
+### 🔒 אבטחה
+- **JWT Authentication** - אימות מאובטח עם tokens
+- **API Keys** - אימות דרך API keys לתכנות
+- **SOC Logging** - כל פעולה נרשמת למרכז אבטחה
+- **IP Blocking** - חסימת כתובות IP זדוניות
+- **Rate Limiting** - הגבלת קצב בקשות
+- **CSRF Protection** - הגנה מפני CSRF attacks
+- **Audit Trail** - מעקב מלא אחר כל הפעולות במערכת
+
+### 📊 מרכז אבטחה (SOC)
+- צפייה בלוגי ביקורת מלאים
+- ניטור אירועי אבטחה
+- סטטיסטיקות ומטריקות
+- ניהול תקריות אבטחה
+- ייצוא נתונים לניתוח
+
+### 🔑 API Keys
+- יצירת מפתחות API מאובטחים
+- ניהול מפתחות (צפייה, מחיקה)
+- הרשאות מבוססות על משתמש
+- מעקב אחר שימוש
+
+### 👥 ניהול משאבים
+- ניהול משתמשים
+- ניהול מחלקות ותפקידים
+- ניהול חדרים
+- ניהול הרשאות מתקדם
+
+---
+
+## התקנה והפעלה (למתכנתים)
+
+### דרישות מערכת
+- **Node.js** 18+ 
+- **npm** או **yarn**
+- **Git**
 
 ### Backend Setup
 
-1. Navigate to the backend directory:
 ```bash
+# 1. כניסה לתיקיית backend
 cd backend
-```
 
-2. Install dependencies:
-```bash
+# 2. התקנת dependencies
 npm install
-```
 
-3. Set up environment variables:
-```bash
+# 3. הגדרת environment variables
 cp .env.example .env
 ```
 
-**IMPORTANT**: Edit `.env` and set a strong `JWT_SECRET`:
+**חשוב מאוד**: ערוך את קובץ `.env` והגדר `JWT_SECRET` חזק:
 ```bash
-# Generate a secure secret:
+# יצירת secret חזק:
 openssl rand -base64 32
 
-# Add to .env:
+# הוספה ל-.env:
 JWT_SECRET=your-generated-secret-here
 ```
 
-4. Run database migrations:
 ```bash
+# 4. הרצת migrations
 npx prisma migrate dev
-```
 
-5. Seed the database with initial admin user (optional but recommended):
-```bash
+# 5. יצירת משתמש אדמין ראשוני (מומלץ)
 npm run seed
 ```
 
-This will create:
-- Initial admin user (email: `admin@school.local`, password: `Admin123!@#`)
-- Default department and role
-- All system permissions
+זה יוצר:
+- משתמש אדמין (ברירת מחדל: `admin@school.local` / `Admin123!@#`)
+- מחלקה ותפקיד בסיסיים
+- כל ההרשאות במערכת
 
-**Important**: Change the admin password after first login!
+**⚠️ חשוב**: שנה את הסיסמה של האדמין לאחר התחברות ראשונה!
 
-You can customize the seed data by setting environment variables:
-- `ADMIN_EMAIL` - Admin email (default: `admin@school.local`)
-- `ADMIN_PASSWORD` - Admin password (default: `Admin123!@#`)
-- `ADMIN_NAME` - Admin name (default: `System Administrator`)
-- `DEFAULT_DEPARTMENT_NAME` - Default department name
-- `DEFAULT_ROLE_NAME` - Default role name
+**התאמה אישית** - ניתן לשנות את נתוני ה-seed דרך environment variables:
+- `ADMIN_EMAIL` - אימייל אדמין (ברירת מחדל: `admin@school.local`)
+- `ADMIN_PASSWORD` - סיסמת אדמין (ברירת מחדל: `Admin123!@#`)
+- `ADMIN_NAME` - שם אדמין (ברירת מחדל: `System Administrator`)
+- `DEFAULT_DEPARTMENT_NAME` - שם מחלקה (אופציונלי)
+- `DEFAULT_ROLE_NAME` - שם תפקיד (אופציונלי)
 
-6. Start the development server:
 ```bash
+# 6. הפעלת שרת פיתוח
 npm run dev
 ```
 
-The backend will run on `http://localhost:3000`
+השרת רץ על `http://localhost:3000`
 
-**Auto-seeding**: If you set `AUTO_SEED=true` in your `.env` file, the server will automatically seed the database on startup if it's empty (development only).
+**Auto-seeding**: אם הגדרת `AUTO_SEED=true` ב-`.env`, השרת יזרע את ה-database אוטומטית בעת הפעלה אם הוא ריק (פיתוח בלבד).
 
 ### Frontend Setup
 
-1. Navigate to the frontend directory:
 ```bash
+# 1. כניסה לתיקיית frontend
 cd frontend
-```
 
-2. Install dependencies:
-```bash
+# 2. התקנת dependencies
 npm install
-```
 
-3. Set up environment variables (optional):
-```bash
+# 3. הגדרת environment variables (אופציונלי)
 cp .env.example .env
 ```
 
-4. Start the development server:
+ערוך את `.env` אם צריך:
+```
+VITE_API_URL=http://localhost:3000/api
+```
+
 ```bash
+# 4. הפעלת שרת פיתוח
 npm run dev
 ```
 
-The frontend will run on `http://localhost:5173`
+הפרונטאנד רץ על `http://localhost:5173`
 
-## Project Structure
+### Scripts נוספים
+
+**Backend:**
+- `npm run build` - Build לייצור
+- `npm run start` - הפעלת שרת ייצור
+- `npm run seed:force` - זריעה כפויה (גם אם יש נתונים)
+- `npm run reset:seed` - איפוס מלא + זריעה
+- `npm run seed-permissions` - יצירת הרשאות בלבד
+- `npx prisma studio` - פתיחת Prisma Studio לניהול database
+
+**Frontend:**
+- `npm run build` - Build לייצור
+- `npm run preview` - Preview של build
+
+---
+
+## מדריך למשתמש
+
+### התחברות ראשונה
+
+1. התחבר עם פרטי האדמין שנוצרו ב-seed
+2. אם זה משתמש חדש - תצטרך להשלים פרופיל (מספר אישי, שם, מחלקה, תפקיד)
+3. חכה לאישור מנהל מערכת (אם אינך אדמין)
+
+### ניהול תלמידים
+
+**הוספת תלמיד חדש:**
+1. עבור לדף "תלמידים"
+2. לחץ על "הוסף תלמיד"
+3. מלא את הפרטים הנדרשים
+4. בחר מחזור (cohort) - המחזורים נוצרים אוטומטית מ-1973
+
+**העלאת תלמידים מאקסל:**
+1. לחץ על "העלאת אקסל ממשו"ב"
+2. בחר קובץ אקסל בפורמט הנדרש
+3. המערכת תזהה ותייבא את כל התלמידים
+
+**ניהול מחזורים:**
+- המחזורים נוצרים אוטומטית מ-1973 עד השנה הנוכחית + 1
+- כל מחזור מתעדכן אוטומטית עם הכיתה הנוכחית שלו
+- ב-1 בספטמבר כל המחזורים עולים כיתה אוטומטית
+
+### ניהול הרשאות
+
+**מתן הרשאה למשתמש:**
+1. עבור ל"ניהול משאבים"
+2. בחר משתמש או תפקיד
+3. לחץ על "נהל הרשאות"
+4. בחר דף והפעל "צפייה" או "עריכה"
+5. המערכת תעניק אוטומטית את כל ה-API permissions הקשורים
+
+**מה קורה כשנותנים הרשאה:**
+- מתן הרשאת **צפייה** → מעניק גישה לכל ה-view APIs של הדף
+- מתן הרשאת **עריכה** → מעניק גישה לכל ה-view + edit APIs של הדף
+
+### יצירת API Key
+
+**רק משתמשים עם הרשאת עריכה לדף "מפתחות API" יכולים ליצור מפתחות:**
+1. עבור לדף "מפתחות API"
+2. אם יש לך הרשאה - תראה טופס ליצירת מפתח
+3. אם אין לך הרשאה - תראה הודעה איך לקבל הרשאה
+4. מלא שם למפתח ובחר תאריך תפוגה (אופציונלי)
+5. **חשוב**: שמור את המפתח מיד - הוא מוצג פעם אחת בלבד!
+
+### מרכז אבטחה (SOC)
+
+**צפייה בלוגים:**
+1. עבור ל"מרכז אבטחה"
+2. צפה בלוגי ביקורת, סטטיסטיקות, ואירועי אבטחה
+3. סנן לפי תאריך, משתמש, פעולה, ועוד
+
+**ניהול תקריות:**
+- אם יש לך הרשאת עריכה → תוכל לעדכן סטטוס תקריות
+- סמן תקריות כ-NEW, INVESTIGATING, RESOLVED, וכו'
+
+---
+
+## מערכת הרשאות
+
+### מושגי יסוד
+
+#### Pages (דפים)
+כל דף במערכת יש לו הרשאות משלו:
+- **Dashboard** - לוח בקרה
+- **Students** - ניהול תלמידים
+- **Resources** - ניהול משאבים (משתמשים, מחלקות, תפקידים)
+- **SOC** - מרכז אבטחה
+- **API Keys** - מפתחות API
+- **Tracks** - ניהול מגמות
+- **Cohorts** - ניהול מחזורים
+- **Classes** - ניהול כיתות
+- **Student Exits** - יציאות תלמידים
+- **Settings** - הגדרות
+
+#### View vs Edit
+- **View (צפייה)** - גישה לקריאה בלבד (GET requests)
+- **Edit (עריכה)** - גישה לקריאה + כתיבה (GET, POST, PUT, DELETE)
+
+#### מקורות הרשאות
+1. **Role Permissions** - הרשאות דרך תפקיד (כל המשתמשים עם התפקיד מקבלים)
+2. **User Permissions** - הרשאות ישירות למשתמש
+3. **Admin Override** - מנהלי מערכת מקבלים גישה מלאה אוטומטית
+
+### איך זה עובד?
+
+**Backend - אימות הרשאות:**
+
+כל API endpoint מוגן ע"י middleware שמבצע:
+
+1. **Authentication** - האם המשתמש מזוהה? (JWT או API Key)
+2. **Admin Check** - האם המשתמש הוא admin? → גישה מלאה
+3. **Policy Checks** - בדיקות מדיניות מיוחדות:
+   - Profile completion endpoints (למשתמשים CREATED/PENDING)
+   - Public reference data (למשתמשים APPROVED - roles, departments)
+   - Self-access endpoints (למשתמשים APPROVED - my-permissions, auth/me)
+4. **Page Permission Check** - האם יש הרשאת דף?
+   - `page:students:view` → גישה ל-view APIs של students
+   - `page:students:edit` → גישה ל-view + edit APIs של students
+5. **Direct Permission Check** - האם יש הרשאה ישירה?
+   - `students:read`, `students:create`, וכו'
+
+אם כל הבדיקות נכשלות → `403 Forbidden`
+
+**Frontend - הגנה על Routes:**
+
+- `PermissionGuard` מגן על routes לפי הרשאות
+- אם אין הרשאה → מעבר לדף 403
+- תוכן מותאם אוטומטית לפי הרשאות (הצגת/הסתרת כפתורים, וכו')
+
+### דוגמאות הרשאות
+
+**משתמש עם `students:view`:**
+- ✅ יכול לראות רשימת תלמידים
+- ✅ יכול לראות פרטי תלמיד ספציפי
+- ❌ לא יכול ליצור/לעדכן/למחוק תלמידים
+
+**משתמש עם `students:edit`:**
+- ✅ כל מה ש-view יכול
+- ✅ יכול ליצור תלמידים חדשים
+- ✅ יכול לעדכן תלמידים קיימים
+- ✅ יכול למחוק תלמידים
+- ✅ יכול לנהל מגמות (כי זה חלק מעריכת תלמידים)
+
+**Admin:**
+- ✅ גישה מלאה לכל דבר במערכת
+
+---
+
+## מערכת אבטחה
+
+### אימות (Authentication)
+
+**שתי דרכים להתחבר:**
+
+1. **JWT Token** - התחברות רגילה
+   ```
+   Authorization: Bearer <token>
+   ```
+
+2. **API Key** - לתכנות אוטומטי
+   ```
+   x-api-key: sk_...
+   ```
+
+**כיצד זה עובד:**
+- כל בקשה עוברת דרך `authenticate` middleware
+- אם אין token/API key → `401 Unauthorized`
+- אם ה-token/API key לא תקין → `401 Unauthorized`
+
+### הרשאות (Authorization)
+
+**כל endpoint מוגן:**
+- ✅ דורש authentication (מפתח)
+- ✅ בודק permissions לפני ביצוע
+- ✅ נרשם ל-SOC logs
+
+**סדר הבדיקות:**
+1. Admin check → אם admin → גישה מלאה
+2. Policy checks → מדיניות מיוחדות
+3. Page permissions → בדיקה לפי דף
+4. Direct permissions → בדיקה ישירה
+5. אם הכל נכשל → `403 Forbidden`
+
+### SOC Logging (רישום פעילות)
+
+**כל פעולה נרשמת:**
+- ✅ מי ביצע את הפעולה (userId, apiKeyId)
+- ✅ מה בוצע (action, resource)
+- ✅ מתי (timestamp)
+- ✅ איך (HTTP method, path)
+- ✅ תוצאה (SUCCESS/FAILURE)
+- ✅ פרטים נוספים (IP, user agent, response time, וכו')
+
+**מה נרשם:**
+- התחברויות (מוצלחות וכשלונות)
+- פעולות CRUD (יצירה, עדכון, מחיקה)
+- ניסיונות גישה לא מורשים
+- שימוש ב-API Keys
+- עדכוני הרשאות
+
+### IP Blocking
+
+**חסימת כתובות IP זדוניות:**
+- המערכת חוסמת IPs לאחר מספר ניסיונות כושלים
+- ניתן לחסום/לבטל חסימה ידנית
+- כל חסימה נרשמת ל-SOC
+
+### API Keys - אבטחה
+
+**כיצד API Keys מאובטחים:**
+- כל key מאוחסן כ-hash (SHA-256) - המפתח המקורי לא נשמר
+- ניתן להגדיר תאריך תפוגה
+- ניתן לבטל (revoke) מפתחות
+- כל שימוש נרשם עם `apiKeyId` ל-SOC
+- **הרשאות מבוססות משתמש** - ה-API key יורש את ההרשאות של המשתמש שיצר אותו
+
+**בדיקת הרשאות עבור API Key:**
+- אם המשתמש הוא admin → ה-API key מקבל גישה מלאה
+- אחרת → ה-API key נבדק מול permissions של המשתמש
+
+---
+
+## API Documentation
+
+### Authentication Endpoints
+
+#### `POST /api/auth/login`
+התחברות למשתמש קיים
+
+**Request:**
+```json
+{
+  "email": "user@example.com",
+  "password": "password123"
+}
+```
+
+**Response:**
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "user": {
+    "id": 1,
+    "email": "user@example.com",
+    "name": "שם משתמש",
+    "isAdmin": false
+  }
+}
+```
+
+#### `POST /api/auth/register`
+רישום משתמש חדש (אם מופעל)
+
+#### `GET /api/auth/me`
+קבלת פרטי המשתמש הנוכחי (מוגן)
+
+#### `POST /api/auth/complete-profile`
+השלמת פרופיל (למשתמשים CREATED/PENDING)
+
+### Students Endpoints
+
+#### `GET /api/students`
+רשימת כל התלמידים
+
+**Query Parameters:**
+- `status` - סטטוס (ACTIVE, GRADUATED, LEFT, ARCHIVED)
+- `cohortId` - סינון לפי מחזור
+- `track` - סינון לפי מגמה
+
+**דורש:** `students:read` או `page:students:view`
+
+#### `GET /api/students/:id`
+פרטי תלמיד ספציפי
+
+**דורש:** `students:read` או `page:students:view`
+
+#### `POST /api/students`
+יצירת תלמיד חדש
+
+**Request:**
+```json
+{
+  "idNumber": "123456789",
+  "firstName": "יוסי",
+  "lastName": "כהן",
+  "gender": "MALE",
+  "cohortId": 1,
+  "studyStartDate": "2024-09-01T00:00:00Z"
+}
+```
+
+**דורש:** `students:create` או `page:students:edit`
+
+#### `PUT /api/students/:id`
+עדכון תלמיד
+
+**דורש:** `students:update` או `page:students:edit`
+
+#### `DELETE /api/students/:id`
+מחיקת תלמיד
+
+**דורש:** `students:delete` או `page:students:edit`
+
+#### `POST /api/students/upload`
+העלאת תלמידים מאקסל
+
+**Content-Type:** `multipart/form-data`
+
+**דורש:** `students:create` או `page:students:edit`
+
+### Cohorts Endpoints
+
+#### `GET /api/cohorts`
+רשימת כל המחזורים
+
+**הערה:** המחזורים נוצרים אוטומטית מ-1973 עד השנה הנוכחית + 1
+
+**Query Parameters:**
+- `isActive` - סינון לפי סטטוס פעיל (true/false)
+- `skipAutoCreate` - דילוג על יצירה אוטומטית (default: false)
+- `forceRefresh` - כפיית עדכון (דילוג על cache, default: false)
+
+**דורש:** `cohorts:read` או `page:cohorts:view` או `page:students:view`
+
+#### `GET /api/cohorts/:id`
+פרטי מחזור ספציפי
+
+**דורש:** `cohorts:read` או `page:cohorts:view` או `page:students:view`
+
+#### `POST /api/cohorts/refresh`
+רענון כל המחזורים (עדכון כיתות וסטטוס)
+
+**דורש:** `cohorts:update` או `page:cohorts:edit`
+
+### Tracks Endpoints
+
+#### `GET /api/tracks`
+רשימת כל המגמות
+
+**דורש:** `tracks:read` או `page:tracks:view` או `page:students:view`
+
+#### `POST /api/tracks`
+יצירת מגמה חדשה
+
+**דורש:** `tracks:create` או `page:tracks:edit` או `page:students:edit`
+
+### API Keys Endpoints
+
+#### `POST /api/api-keys`
+יצירת מפתח API חדש
+
+**Request:**
+```json
+{
+  "name": "My API Key",
+  "expiresAt": "2026-12-31T23:59:59Z" // אופציונלי
+}
+```
+
+**Response:**
+```json
+{
+  "message": "API key created successfully...",
+  "apiKey": {
+    "id": 1,
+    "key": "sk_c036029d9e2ed0d632719f066b5ccb7597c4f0c35e568441ea1be663b3e08af5",
+    "name": "My API Key",
+    "createdAt": "2025-12-09T09:31:15Z",
+    "expiresAt": null
+  },
+  "warning": "This is the only time you will see this key..."
+}
+```
+
+**דורש:** `api-keys:create` או `page:api-keys:edit`
+
+**חשוב:** המפתח המקורי מוצג פעם אחת בלבד! שמור אותו מיד.
+
+#### `GET /api/api-keys`
+רשימת מפתחות API של המשתמש
+
+**דורש:** `api-keys:read` או `page:api-keys:view`
+
+#### `DELETE /api/api-keys/:id`
+ביטול מפתח API
+
+**דורש:** `api-keys:delete` או `page:api-keys:edit`
+
+### SOC Endpoints
+
+#### `GET /api/soc/audit-logs`
+לוגי ביקורת
+
+**Query Parameters:**
+- `userId` - סינון לפי משתמש
+- `action` - סינון לפי פעולה
+- `resource` - סינון לפי משאב
+- `status` - סינון לפי סטטוס (SUCCESS/FAILURE)
+- `startDate`, `endDate` - טווח תאריכים
+- `limit`, `offset` - pagination
+
+**דורש:** `soc:read` או `page:soc:view`
+
+#### `GET /api/soc/stats`
+סטטיסטיקות אבטחה
+
+**דורש:** `soc:read` או `page:soc:view`
+
+#### `PUT /api/soc/incidents/:id`
+עדכון אירוע אבטחה
+
+**דורש:** `soc:update` או `page:soc:edit`
+
+---
+
+## מבנה הפרויקט
 
 ```
 School-Admissions-Core/
-├── backend/
+├── backend/                      # Backend API
 │   ├── src/
-│   │   ├── lib/           # Shared utilities (prisma, errors, validation)
-│   │   ├── modules/       # Feature modules (soldiers, departments, etc.)
-│   │   └── server.ts      # Express server setup
+│   │   ├── lib/                  # ספריות משותפות
+│   │   │   ├── auth/             # אימות (JWT, API Keys)
+│   │   │   ├── permissions/      # מערכת הרשאות
+│   │   │   ├── audit/            # רישום פעילות
+│   │   │   ├── security/         # אבטחה (IP blocking, rate limiting)
+│   │   │   └── database/         # Prisma client
+│   │   ├── modules/              # מודולים לפי תכונה
+│   │   │   ├── students/         # ניהול תלמידים
+│   │   │   ├── cohorts/          # ניהול מחזורים
+│   │   │   ├── tracks/           # ניהול מגמות
+│   │   │   ├── api-keys/         # מפתחות API
+│   │   │   ├── soc/              # מרכז אבטחה
+│   │   │   └── permissions/      # ניהול הרשאות
+│   │   └── server.ts             # הגדרת שרת Express
 │   └── prisma/
-│       └── schema.prisma  # Database schema
-├── frontend/
+│       └── schema.prisma         # סכמת database
+│
+├── frontend/                     # Frontend React
 │   ├── src/
-│   │   ├── components/    # React components
-│   │   ├── lib/           # API client and utilities
-│   │   ├── types/         # TypeScript type definitions
-│   │   └── App.tsx        # Main app component
-│   └── ...
-└── docs/                  # Comprehensive documentation
-    ├── security/          # Security documentation
-    ├── features/          # Feature documentation
-    ├── guides/            # How-to guides
-    └── improvements/      # Improvement documentation
+│   │   ├── features/             # תכונות לפי עמוד
+│   │   │   ├── students/         # ניהול תלמידים
+│   │   │   ├── permissions/      # ניהול הרשאות
+│   │   │   └── api/              # מפתחות API ותיעוד
+│   │   ├── shared/               # קומפוננטים משותפים
+│   │   │   ├── components/       # Layout, UI components
+│   │   │   └── lib/              # API client, utilities
+│   │   └── App.tsx               # נקודת כניסה
+│
+└── docs/                         # תיעוד מקיף
+    ├── security/                 # תיעוד אבטחה
+    ├── features/                 # תיעוד תכונות
+    ├── guides/                   # מדריכים
+    └── improvements/             # שיפורים שבוצעו
 ```
 
-## Documentation
+---
 
-תיעוד מקיף של המערכת נמצא בתיקיית [`docs/`](./docs/):
+## פרטים טכניים למתכנתים
 
-- **[📚 Documentation Overview](./docs/README.md)** - סקירה כללית של כל התיעוד
-- **[🔒 Security](./docs/security/)** - תיעוד אבטחה מקיף
-- **[⚙️ Features](./docs/features/)** - תיעוד תכונות המערכת
-- **[📖 Guides](./docs/guides/)** - מדריכים והנחיות
-- **[🚀 Improvements](./docs/improvements/)** - תיעוד שיפורים שבוצעו
+### Tech Stack
 
-### Quick Links
+**Backend:**
+- Node.js + Express 5
+- TypeScript
+- Prisma ORM (SQLite)
+- Zod (validation)
+- JWT + bcrypt (authentication)
+- Pino (logging)
 
-- [Admin System](./docs/features/ADMIN_SYSTEM.md) - מערכת ניהול מנהלים
-- [Permissions System](./docs/features/PERMISSIONS_SYSTEM.md) - מערכת הרשאות
-- [Security Assessment](./docs/security/SECURITY_ASSESSMENT.md) - הערכת אבטחה
-- [How to Check Admin](./docs/guides/HOW_TO_CHECK_ADMIN.md) - איך לבדוק אם משתמש הוא admin
-- [Large File Uploads](./docs/guides/LARGE_FILE_UPLOADS.md) - העלאת קבצים גדולים
-- [Database Seeding](./docs/guides/DATABASE_SEEDING.md) - מדריך ליצירת משתמש אדמין ראשוני
+**Frontend:**
+- React 19
+- TypeScript
+- Vite
+- Tailwind CSS
+- React Router
+- Axios
 
-## API Endpoints
+### Database Schema
 
-### Authentication (Public)
-- `POST /api/auth/register` - Register a new user/soldier
-- `POST /api/auth/login` - Login user
-- `GET /api/auth/me` - Get current user info (Protected)
+**Models עיקריים:**
+- `Soldier` - משתמשים/עובדים
+- `Student` - תלמידים
+- `Cohort` - מחזורים (נוצרים אוטומטית מ-1973)
+- `Class` - כיתות
+- `Track` - מגמות
+- `Permission` - הרשאות
+- `UserPermission` - הרשאות משתמש
+- `RolePermission` - הרשאות תפקיד
+- `ApiKey` - מפתחות API
+- `AuditLog` - לוגי פעילות
 
-### Soldiers (Protected - Requires Authentication)
-- `GET /api/soldiers` - Get all soldiers
-- `GET /api/soldiers/:id` - Get soldier by ID
-- `POST /api/soldiers` - Create soldier (Note: Use /auth/register for new users)
-- `PUT /api/soldiers/:id` - Update soldier
-- `DELETE /api/soldiers/:id` - Delete soldier
+### Permission System Architecture
 
-### Departments
-- `GET /api/departments` - Get all departments
-- `GET /api/departments/:id` - Get department by ID
-- `POST /api/departments` - Create department
-- `GET /api/departments/:id/commanders` - Get department commanders
-- `DELETE /api/departments/:id` - Delete department
+**Backend:**
+- `permission-registry.ts` - רשימה מרכזית של כל ה-pages וה-APIs
+- `permissions.ts` - לוגיקה לבדיקת הרשאות
+- `api-permission-middleware.ts` - middleware הגנת API endpoints
+- `permission-policies.ts` - מדיניות מיוחדות (admin, profile completion, וכו')
 
-### Roles
-- `GET /api/roles` - Get all roles
-- `GET /api/roles/:id` - Get role by ID
-- `POST /api/roles` - Create role
-- `DELETE /api/roles/:id` - Delete role
+**Frontend:**
+- `PermissionsContext.tsx` - context לבדיקת הרשאות
+- `PermissionGuard.tsx` - הגנה על routes
+- `PageModeContext.tsx` - ניהול מצב view/edit
 
-### Rooms
-- `GET /api/rooms` - Get all rooms
-- `GET /api/rooms/:id` - Get room by ID
-- `POST /api/rooms` - Create room
-- `DELETE /api/rooms/:id` - Delete room
+### Cohort Management
 
-## Improvements Made
+**יצירה אוטומטית:**
+- מחזורים נוצרים אוטומטית בעת הפעלת השרת
+- מחזורים נוצרים/מתעדכנים בכל קריאה ל-`GET /api/cohorts` (עם cache של שעה)
+- כל מחזור מתעדכן אוטומטית עם הכיתה הנוכחית ב-1 בספטמבר
 
-### Backend
-- ✅ Prisma client singleton pattern to prevent multiple instances
-- ✅ Centralized error handling with custom error classes
-- ✅ Input validation using Zod schemas
-- ✅ Proper TypeScript types throughout
-- ✅ Better HTTP status codes (201 for creation)
-- ✅ Environment variable configuration
-- ✅ CORS configuration
+**Cache:**
+- משתמש ב-static cache (משותף בין כל instances)
+- Cooldown של שעה (מונע הרצה על כל קריאת API)
+- ניתן לעקוף עם `forceRefresh=true`
 
-### Frontend
-- ✅ Centralized API client with error handling
-- ✅ TypeScript types for all data structures
-- ✅ Edit functionality for all resources
-- ✅ Better error display (no more alerts)
-- ✅ Loading states
-- ✅ Environment variable support
-- ✅ Removed `any` types
+---
 
-## Future Improvements
+## כללי אבטחה למשתמשים
 
-- [ ] Add authentication and authorization
-- [ ] Add pagination for large datasets
-- [ ] Add search and filtering
-- [ ] Add unit and integration tests
-- [ ] Add API documentation (Swagger/OpenAPI)
-- [ ] Migrate to PostgreSQL for production
-- [ ] Add logging (Winston/Pino)
-- [ ] Add rate limiting
-- [ ] Add request/response logging middleware
-- [ ] Add Docker support
-- [ ] Add CI/CD pipeline
+1. **שמור על הסיסמה חזקה** - שים סיסמה עם לפחות 8 תווים, אותיות, מספרים וסימנים
+2. **שנה את סיסמת האדמין** - לאחר התחברות ראשונה, שנה את הסיסמה
+3. **API Keys** - שמור מפתחות API במקום בטוח, לעולם אל תשתף אותם
+4. **הרשאות** - תן רק את ההרשאות הנדרשות למשתמשים
+5. **מעקב** - בדוק את SOC logs באופן קבוע לזיהוי פעילות חשודה
 
-## License
+---
+
+## תמיכה וסיוע
+
+לשאלות טכניות או בעיות:
+1. בדוק את התיעוד ב-`docs/`
+2. בדוק את ה-SOC logs לאירועי אבטחה
+3. פנה למנהל המערכת
+
+---
+
+## רישיון
 
 ISC
 
+---
+
+**גרסה:** 1.0.0  
+**עודכן לאחרונה:** 2025-12-09

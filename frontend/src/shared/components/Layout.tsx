@@ -17,7 +17,6 @@ import { Search } from '../ui/Search';
 import { authStorage } from '../../features/auth/auth';
 import { useAuth } from '../../features/auth/AuthContext';
 import { usePermissions } from '../../features/permissions/PermissionsContext';
-import { PageModeToggle } from '../../features/permissions/PageModeToggle';
 import { cn } from '../lib/utils';
 
 interface NavItem {
@@ -117,7 +116,6 @@ export function Layout() {
               <Search />
             </div>
             <div className="flex items-center gap-x-3">
-              <PageModeToggle />
               <ThemeToggle />
               {user && (
                 <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-[#080808] border border-gray-200 dark:border-[#1F1F1F]">

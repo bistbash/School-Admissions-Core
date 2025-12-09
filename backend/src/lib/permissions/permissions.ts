@@ -114,9 +114,89 @@ export async function hasScopedPermission(
     isAdmin: userIsAdmin,
   };
 
-  // Parse permission
-  const { resource, action, scope } = parsePermission(permissionString);
+  /**
+   * Handle page permissions: page:pageName:view or page:pageName:edit
+   * These are stored in DB as resource='page' and action='pageName:view' or 'pageName:edit'
+   * This is a special permission format that requires custom parsing
+   */
+  if (permissionString.startsWith('page:')) {
+    const parts = permissionString.split(':');
+    if (parts.length === 3) {
+      const pageName = parts[1];
+      const actionType = parts[2]; // 'view' or 'edit'
+      const expectedAction = `${pageName}:${actionType}`;
+      
+      return checkPagePermission(userId, user, 'page', expectedAction);
+    }
+  }
 
+  // Parse permission for standard permissions (resource:action format)
+  const { resource, action, scope } = parsePermission(permissionString);
+  
+  return checkStandardPermission(userId, user, resource, action, scope, fullContext);
+}
+
+/**
+ * Check page permission (resource='page', action='pageName:view' or 'pageName:edit')
+ */
+async function checkPagePermission(
+  userId: number,
+  user: any,
+  resource: string,
+  expectedAction: string
+): Promise<boolean> {
+  // Check direct user permissions
+  const userPermissions = await (prisma as any).userPermission.findMany({
+    where: {
+      userId,
+      isActive: true,
+    },
+    include: {
+      permission: true,
+    },
+  });
+
+  for (const userPerm of userPermissions) {
+    const perm = userPerm.permission;
+    if (perm.resource === resource && perm.action === expectedAction) {
+      return true;
+    }
+  }
+
+  // Check role permissions
+  if (user.roleId) {
+    const rolePermissions = await (prisma as any).rolePermission.findMany({
+      where: {
+        roleId: user.roleId,
+        isActive: true,
+      },
+      include: {
+        permission: true,
+      },
+    });
+
+    for (const rolePerm of rolePermissions) {
+      const perm = rolePerm.permission;
+      if (perm.resource === resource && perm.action === expectedAction) {
+        return true;
+      }
+    }
+  }
+  
+  return false;
+}
+
+/**
+ * Check standard permission (resource:action format with optional scope)
+ */
+async function checkStandardPermission(
+  userId: number,
+  user: any,
+  resource: string,
+  action: string,
+  scope: PermissionScope | null,
+  context: PermissionContext
+): Promise<boolean> {
   // Check direct user permissions
   const userPermissions = await (prisma as any).userPermission.findMany({
     where: {
@@ -133,7 +213,7 @@ export async function hasScopedPermission(
     if (perm.resource === resource && perm.action === action) {
       // Check if permission has scope stored (we'll add this field later)
       // For now, check if scope matches
-      if (!scope || scopeMatches(scope, fullContext)) {
+      if (!scope || scopeMatches(scope, context)) {
         return true;
       }
     }
@@ -154,7 +234,7 @@ export async function hasScopedPermission(
     for (const rolePerm of rolePermissions) {
       const perm = rolePerm.permission;
       if (perm.resource === resource && perm.action === action) {
-        if (!scope || scopeMatches(scope, fullContext)) {
+        if (!scope || scopeMatches(scope, context)) {
           return true;
         }
       }

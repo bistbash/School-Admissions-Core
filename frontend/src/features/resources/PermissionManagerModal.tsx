@@ -474,21 +474,29 @@ export function PermissionManagerModal({
                       const isViewPending = isOperationPending(page.page, 'view');
                       const isEditPending = isOperationPending(page.page, 'edit');
 
-                      // Get unique APIs (calculated inline, not with useMemo to avoid hook order issues)
-                      let displayedAPIs: typeof page.viewAPIs = [];
-                      if (hasEdit) {
-                        const allAPIs = [...page.viewAPIs, ...page.editAPIs];
-                        const unique = new Map<string, typeof page.viewAPIs[0]>();
-                        allAPIs.forEach(api => {
-                          const key = `${api.resource}:${api.action}`;
-                          if (!unique.has(key)) {
-                            unique.set(key, api);
+                      // Get unique APIs - always deduplicate by resource:action
+                      // This prevents showing the same permission multiple times (e.g., multiple soc:read tags)
+                      const allAPIs = hasEdit 
+                        ? [...page.viewAPIs, ...page.editAPIs]
+                        : hasView 
+                          ? page.viewAPIs 
+                          : [];
+                      
+                      const uniqueAPIs = new Map<string, typeof page.viewAPIs[0]>();
+                      allAPIs.forEach(api => {
+                        const key = `${api.resource}:${api.action}`;
+                        // Keep the first occurrence, but prefer description in Hebrew if available
+                        if (!uniqueAPIs.has(key)) {
+                          uniqueAPIs.set(key, api);
+                        } else {
+                          // If current API has Hebrew description and existing doesn't, replace it
+                          const existing = uniqueAPIs.get(key)!;
+                          if (api.descriptionHebrew && !existing.descriptionHebrew) {
+                            uniqueAPIs.set(key, api);
                           }
-                        });
-                        displayedAPIs = Array.from(unique.values());
-                      } else if (hasView) {
-                        displayedAPIs = page.viewAPIs;
-                      }
+                        }
+                      });
+                      const displayedAPIs = Array.from(uniqueAPIs.values());
 
                       return (
                         <div
@@ -623,19 +631,24 @@ export function PermissionManagerModal({
                                 APIs שניתנו אוטומטית:
                               </p>
                               <div className="flex flex-wrap gap-1.5">
-                                {displayedAPIs.map((api, idx) => {
+                                {displayedAPIs.map((api) => {
+                                  // Check if this API exists in editAPIs
                                   const isEditAPI = page.editAPIs.some(
                                     e => e.resource === api.resource && e.action === api.action
                                   );
+                                  // Color coding: green for edit permissions, blue for view
                                   const colorClass = isEditAPI && hasEdit
                                     ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800'
                                     : 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800';
                                   
+                                  // Use resource:action as key since we've already deduplicated
+                                  const uniqueKey = `${api.resource}:${api.action}`;
+                                  
                                   return (
                                     <span
-                                      key={`${api.resource}:${api.action}:${idx}`}
+                                      key={uniqueKey}
                                       className={cn('text-xs px-2 py-1 rounded-md font-medium border', colorClass)}
-                                      title={api.descriptionHebrew || api.description}
+                                      title={api.descriptionHebrew || api.description || `${api.resource}:${api.action}`}
                                     >
                                       {api.resource}:{api.action}
                                     </span>

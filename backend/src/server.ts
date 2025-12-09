@@ -145,6 +145,8 @@ app.use('/api', (req, res, next) => {
   if (isPublicEndpoint(req)) {
     return next();
   }
+  
+  // Profile completion endpoints are handled by requireAPIPermission (it checks user status)
   // Apply permission check to all other API routes
   requireAPIPermission(req, res, next);
 });
@@ -190,6 +192,49 @@ app.use(errorHandler);
 
 // Start metrics logging
 startMetricsLogging();
+
+// Initialize cohorts on server startup - ensure all cohorts from 1973 to current year + 1 exist
+// This runs asynchronously and doesn't block server startup
+(async () => {
+  try {
+    const { CohortsService } = await import('./modules/cohorts/cohorts.service');
+    const cohortsService = new CohortsService();
+    
+    const currentYear = new Date().getFullYear();
+    const minYear = 1973;
+    const maxYear = currentYear + 1;
+    const totalCohorts = maxYear - minYear + 1;
+    
+    logger.info({ 
+      minYear, 
+      maxYear, 
+      totalCohorts 
+    }, 'Initializing cohorts (from 1973 to current year + 1)...');
+    
+    await cohortsService.ensureAllCohortsExist();
+    
+    // Verify count after initialization
+    const { prisma } = await import('./lib/database/prisma');
+    const finalCount = await prisma.cohort.count({});
+    
+    logger.info({ 
+      minYear, 
+      maxYear, 
+      expected: totalCohorts,
+      actual: finalCount 
+    }, 'Cohorts initialized successfully');
+    
+    if (finalCount === totalCohorts) {
+      console.log(`✅ Cohorts initialized: ${finalCount} cohorts exist (${minYear}-${maxYear})`);
+    } else {
+      console.warn(`⚠️  Cohorts initialized with warning: Expected ${totalCohorts}, found ${finalCount}`);
+    }
+  } catch (error: any) {
+    logger.warn({ error: error.message }, 'Cohort initialization failed (non-critical)');
+    console.warn('⚠️  Cohort initialization failed (non-critical). Cohorts will be created on first API call.');
+    // Don't fail server startup if cohort initialization fails - it will retry on next API call
+  }
+})();
 
 // Auto-seed database if empty (only in development and if AUTO_SEED is enabled)
 if (process.env.NODE_ENV !== 'production' && process.env.AUTO_SEED === 'true') {

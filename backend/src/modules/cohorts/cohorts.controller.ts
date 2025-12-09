@@ -37,12 +37,17 @@ export class CohortsController {
   /**
    * Get all cohorts
    * GET /api/cohorts
+   * Query params:
+   * - isActive: filter by active status (true/false)
+   * - skipAutoCreate: skip automatic cohort creation/update (default: false)
+   * - forceRefresh: force refresh of all cohorts (bypasses cache, default: false)
    */
   async getAll(req: Request, res: Response, next: NextFunction) {
     try {
       const filters = {
         isActive: req.query.isActive === 'true' ? true : req.query.isActive === 'false' ? false : undefined,
         skipAutoCreate: req.query.skipAutoCreate === 'true',
+        forceRefresh: req.query.forceRefresh === 'true',
       };
 
       const cohorts = await cohortsService.getAll(filters);
@@ -86,6 +91,7 @@ export class CohortsController {
    * POST /api/cohorts/refresh
    * This manually triggers the update of all cohorts (happens automatically on GET /api/cohorts)
    * Useful for manual refresh or scheduled tasks
+   * Forces a refresh (bypasses cache)
    */
   async refresh(req: Request, res: Response, next: NextFunction) {
     try {
@@ -106,11 +112,11 @@ export class CohortsController {
         console.error('Failed to log REFRESH_ALL_COHORTS:', err);
       });
 
-      // This will update all cohorts and create missing ones
+      // Force refresh - update all cohorts and create missing ones
       await cohortsService.ensureAllCohortsExist();
       
-      // Get updated count
-      const allCohorts = await cohortsService.getAll({ skipAutoCreate: true });
+      // Get updated count (force refresh to get latest data)
+      const allCohorts = await cohortsService.getAll({ skipAutoCreate: true, forceRefresh: true });
       
       res.json({
         message: 'כל המחזורים עודכנו בהצלחה',

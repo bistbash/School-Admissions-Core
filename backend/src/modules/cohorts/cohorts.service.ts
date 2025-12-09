@@ -113,6 +113,12 @@ export function generateCohortName(year: number): string {
 }
 
 export class CohortsService {
+  // Static cache for cohort initialization - shared across ALL instances
+  // This ensures cooldown works even when multiple CohortsService instances are created
+  // (e.g., one in controller, one at server startup)
+  private static lastEnsureTime: number = 0;
+  private static readonly ENSURE_COOLDOWN_MS = 60 * 60 * 1000; // 1 hour - only run ensure once per hour max (unless forced)
+
   /**
    * Create a new cohort
    */
@@ -165,8 +171,9 @@ export class CohortsService {
   /**
    * Get all cohorts
    * Also ensures all possible cohorts exist (from 1973 to current year + 1)
+   * Uses caching to avoid running ensureAllCohortsExist on every request
    */
-  async getAll(filters?: { isActive?: boolean; skipAutoCreate?: boolean }) {
+  async getAll(filters?: { isActive?: boolean; skipAutoCreate?: boolean; forceRefresh?: boolean }) {
     const where: any = {};
     
     if (filters?.isActive !== undefined) {
@@ -174,12 +181,22 @@ export class CohortsService {
     }
 
     // Ensure all possible cohorts exist (unless skipAutoCreate is true)
+    // Use static cache to avoid running this on every API call (once per hour max)
+    // Static cache ensures cooldown works across all CohortsService instances
     if (!filters?.skipAutoCreate) {
-      try {
-        await this.ensureAllCohortsExist();
-      } catch (error: any) {
-        console.error('Error in ensureAllCohortsExist:', error);
-        // Continue even if ensureAllCohortsExist fails - return existing cohorts
+      const now = Date.now();
+      const shouldRunEnsure = 
+        filters?.forceRefresh || 
+        now - CohortsService.lastEnsureTime > CohortsService.ENSURE_COOLDOWN_MS;
+      
+      if (shouldRunEnsure) {
+        try {
+          await this.ensureAllCohortsExist();
+          CohortsService.lastEnsureTime = now;
+        } catch (error: any) {
+          console.error('Error in ensureAllCohortsExist:', error);
+          // Continue even if ensureAllCohortsExist fails - return existing cohorts
+        }
       }
     }
 
@@ -308,83 +325,132 @@ export class CohortsService {
    * and new cohorts are created
    * 
    * IMPORTANT: This function is called automatically on every GET /api/cohorts request
-   * to ensure data is always up-to-date
+   * to ensure data is always up-to-date. It's also called on server startup to initialize cohorts.
+   * 
+   * OPTIMIZED: Uses batch operations for better performance with large datasets
    */
   async ensureAllCohortsExist() {
     const currentYear = new Date().getFullYear();
     const minYear = 1973;
     const maxYear = currentYear + 1;
+    const totalYears = maxYear - minYear + 1; // Total cohorts that should exist
 
-    // First, update ALL existing cohorts with correct grade and status
-    // This ensures that on September 1st, all cohorts automatically advance grades
-    const allCohorts = await (prisma as any).cohort.findMany({});
-    
-    for (const cohort of allCohorts) {
-      try {
-        const { currentGrade, isActive } = this.calculateCohortGradeAndStatus(cohort.startYear);
-        
-        // Only update if grade or status changed
-        if (cohort.currentGrade !== currentGrade || cohort.isActive !== isActive) {
-          const updateData: any = {
-            isActive,
-          };
-          // Handle null explicitly for SQLite
-          updateData.currentGrade = currentGrade;
-          
-          await (prisma as any).cohort.update({
-            where: { id: cohort.id },
-            data: updateData,
-          });
-        }
-      } catch (error: any) {
-        console.error(`Error updating cohort ${cohort.id} (${cohort.name}):`, error.message);
-        // Continue with other cohorts even if one fails
-      }
-    }
-
-    // Then, create missing cohorts (including the new cohort for next year)
-    for (let year = minYear; year <= maxYear; year++) {
-      const cohortName = generateCohortName(year);
-      const { currentGrade, isActive } = this.calculateCohortGradeAndStatus(year);
-      
-      // Check if cohort exists
-      const existing = await (prisma as any).cohort.findFirst({
-        where: {
-          OR: [
-            { name: cohortName },
-            { startYear: year },
-          ],
-        },
+    try {
+      // Get all existing cohorts in one query (more efficient)
+      const allCohorts = await (prisma as any).cohort.findMany({
+        orderBy: { startYear: 'asc' },
       });
 
-      if (!existing) {
-        // Create cohort with correct grade and status
-        // This automatically creates the new cohort on September 1st
-        await (prisma as any).cohort.create({
-          data: {
+      // Create a map of existing cohorts by startYear for quick lookup
+      const existingCohortsMap = new Map<number, any>();
+      allCohorts.forEach((cohort: any) => {
+        existingCohortsMap.set(cohort.startYear, cohort);
+      });
+
+      // Prepare batches for updates and creates
+      const cohortsToUpdate: Array<{ id: number; data: any }> = [];
+      const cohortsToCreate: Array<any> = [];
+
+      // Process all required years (1973 to current year + 1)
+      for (let year = minYear; year <= maxYear; year++) {
+        const cohortName = generateCohortName(year);
+        const { currentGrade, isActive } = this.calculateCohortGradeAndStatus(year);
+        
+        const existing = existingCohortsMap.get(year);
+
+        if (!existing) {
+          // Cohort doesn't exist - prepare for creation
+          cohortsToCreate.push({
             name: cohortName,
             startYear: year,
             currentGrade,
             isActive,
-          },
-        });
-      } else {
-        // Even if cohort exists, update it to ensure it has the correct grade/status
-        // This handles the case where we're updating existing cohorts
-        const updateData: any = {
-          isActive,
-        };
-        if (currentGrade !== null) {
-          updateData.currentGrade = currentGrade;
+          });
         } else {
-          updateData.currentGrade = null;
+          // Cohort exists - check if update is needed
+          const needsUpdate = 
+            existing.currentGrade !== currentGrade || 
+            existing.isActive !== isActive ||
+            existing.name !== cohortName; // Also update name if it changed (e.g., after code fixes)
+
+          if (needsUpdate) {
+            const updateData: any = {
+              isActive,
+              currentGrade,
+            };
+            // Update name if it changed (shouldn't happen often, but ensures consistency)
+            if (existing.name !== cohortName) {
+              updateData.name = cohortName;
+            }
+            
+            cohortsToUpdate.push({
+              id: existing.id,
+              data: updateData,
+            });
+          }
+        }
+      }
+
+      // Batch create missing cohorts
+      if (cohortsToCreate.length > 0) {
+        // SQLite doesn't support createMany with nested operations, so we'll create one by one
+        // but we can use a transaction for atomicity
+        await (prisma as any).$transaction(
+          cohortsToCreate.map((cohortData) => 
+            (prisma as any).cohort.create({ data: cohortData })
+          ),
+          {
+            timeout: 30000, // 30 second timeout for large batch operations
+          }
+        );
+        // Only log if significant number of cohorts were created (to avoid spam)
+        if (cohortsToCreate.length > 5) {
+          console.log(`✅ Created ${cohortsToCreate.length} missing cohorts (from ${minYear} to ${maxYear})`);
+        }
+      }
+
+      // Batch update existing cohorts
+      if (cohortsToUpdate.length > 0) {
+        // Update in parallel batches (SQLite handles this better than sequential)
+        const updatePromises = cohortsToUpdate.map(({ id, data }) =>
+          (prisma as any).cohort.update({
+            where: { id },
+            data,
+          }).catch((error: any) => {
+            console.error(`Error updating cohort ${id}:`, error.message);
+            return null; // Continue even if one update fails
+          })
+        );
+        
+        const results = await Promise.all(updatePromises);
+        const successCount = results.filter(r => r !== null).length;
+        const failedCount = results.length - successCount;
+        
+        // Only log if there were updates or failures
+        if (successCount > 0) {
+          // Only log if significant number of updates (avoid spam on every API call)
+          if (cohortsToUpdate.length > 10 || failedCount > 0) {
+            console.log(`✅ Updated ${successCount} cohorts with current grade/status${failedCount > 0 ? ` (${failedCount} failed)` : ''}`);
+          }
         }
         
-        await (prisma as any).cohort.update({
-          where: { id: existing.id },
-          data: updateData,
-        });
+        if (failedCount > 0) {
+          console.warn(`⚠️  ${failedCount} cohort update(s) failed`);
+        }
       }
+
+      // Verify final count (only log warnings if there's a mismatch)
+      const finalCount = await (prisma as any).cohort.count({});
+      if (finalCount < totalYears) {
+        console.warn(`⚠️  Warning: Expected ${totalYears} cohorts, but found ${finalCount}. Some cohorts may be missing.`);
+      } else if (finalCount > totalYears) {
+        console.warn(`⚠️  Warning: Found ${finalCount} cohorts, but expected ${totalYears}. There may be duplicate or extra cohorts.`);
+      }
+      // Don't log success on every API call - only log if there were actual changes
+
+    } catch (error: any) {
+      console.error('Error in ensureAllCohortsExist:', error);
+      throw error; // Re-throw to allow caller to handle
     }
   }
 
