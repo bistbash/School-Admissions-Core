@@ -18,7 +18,9 @@ interface Track {
 export function TracksManagement() {
   const { hasPagePermission } = usePermissions();
   const { mode } = usePageMode();
-  const canEdit = hasPagePermission('tracks', 'edit');
+  // Check students page edit permission since TracksManagement is embedded in StudentsPage
+  // Track creation is part of students page edit permissions per permission-registry.ts
+  const canEdit = hasPagePermission('students', 'edit');
   const [tracks, setTracks] = useState<Track[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);

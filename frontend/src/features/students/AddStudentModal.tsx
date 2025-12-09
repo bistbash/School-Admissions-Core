@@ -31,9 +31,6 @@ interface AddStudentModalProps {
 export function AddStudentModal({ isOpen, onClose, onSuccess, cohorts }: AddStudentModalProps) {
   const [tracks, setTracks] = useState<Track[]>([]);
   const [isLoadingTracks, setIsLoadingTracks] = useState(false);
-  const [showAddTrack, setShowAddTrack] = useState(false);
-  const [newTrackName, setNewTrackName] = useState('');
-  const [isAddingTrack, setIsAddingTrack] = useState(false);
 
   const [formData, setFormData] = useState({
     idNumber: '',
@@ -87,24 +84,6 @@ export function AddStudentModal({ isOpen, onClose, onSuccess, cohorts }: AddStud
       console.error('Failed to load tracks:', error);
     } finally {
       setIsLoadingTracks(false);
-    }
-  };
-
-  const handleAddTrack = async () => {
-    if (!newTrackName.trim()) return;
-
-    try {
-      setIsAddingTrack(true);
-      await apiClient.post('/tracks', { name: newTrackName.trim() });
-      await loadTracks();
-      setFormData((prev) => ({ ...prev, track: newTrackName.trim() }));
-      setNewTrackName('');
-      setShowAddTrack(false);
-    } catch (error: any) {
-      const errorMessage = error.response?.data?.error || error.message || 'שגיאה בהוספת המגמה';
-      setErrors({ track: errorMessage });
-    } finally {
-      setIsAddingTrack(false);
     }
   };
 
@@ -328,63 +307,20 @@ export function AddStudentModal({ isOpen, onClose, onSuccess, cohorts }: AddStud
                   { value: '8', label: '8' },
                 ]}
               />
-              <div className="space-y-2">
-                <Select
-                  label="מגמה"
-                  value={formData.track}
-                  onChange={(e) => handleChange('track', e.target.value)}
-                  error={errors.track}
-                  options={[
-                    { value: '', label: 'ללא מגמה' },
-                    ...tracks.map((track) => ({
-                      value: track.name,
-                      label: track.name,
-                    })),
-                  ]}
-                  disabled={isLoadingTracks}
-                />
-                {!showAddTrack ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setShowAddTrack(true)}
-                    className="w-full text-xs"
-                  >
-                    + הוסף מגמה חדשה
-                  </Button>
-                ) : (
-                  <div className="flex gap-2">
-                    <Input
-                      placeholder="שם מגמה חדשה"
-                      value={newTrackName}
-                      onChange={(e) => setNewTrackName(e.target.value)}
-                      className="flex-1"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={handleAddTrack}
-                      isLoading={isAddingTrack}
-                      disabled={!newTrackName.trim() || isAddingTrack}
-                    >
-                      הוסף
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setShowAddTrack(false);
-                        setNewTrackName('');
-                      }}
-                    >
-                      ביטול
-                    </Button>
-                  </div>
-                )}
-              </div>
+              <Select
+                label="מגמה"
+                value={formData.track}
+                onChange={(e) => handleChange('track', e.target.value)}
+                error={errors.track}
+                options={[
+                  { value: '', label: 'ללא מגמה' },
+                  ...tracks.map((track) => ({
+                    value: track.name,
+                    label: track.name,
+                  })),
+                ]}
+                disabled={isLoadingTracks}
+              />
               <Select
                 label="מחזור *"
                 value={formData.cohortId}
