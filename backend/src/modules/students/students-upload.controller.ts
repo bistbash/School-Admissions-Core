@@ -91,6 +91,30 @@ const upload = multer({
 
 export class StudentsUploadController {
   /**
+   * Download Excel template file
+   * GET /api/students/upload/template
+   */
+  async downloadTemplate(req: Request, res: Response, next: NextFunction) {
+    try {
+      const buffer = await studentsUploadService.generateExcelTemplate();
+      
+      // Use RFC 5987 encoding for non-ASCII characters in filename
+      // Format: filename*=UTF-8''encoded-filename
+      const filename = 'פורמט_העלאת_תלמידים.xlsx';
+      const encodedFilename = encodeURIComponent(filename);
+      
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      // Use filename* with UTF-8 encoding (RFC 5987) for Hebrew characters
+      // Also include ASCII fallback for older browsers
+      res.setHeader('Content-Disposition', `attachment; filename="students_template.xlsx"; filename*=UTF-8''${encodedFilename}`);
+      res.send(buffer);
+    } catch (error) {
+      console.error('[TEMPLATE] Error generating template:', error);
+      next(error);
+    }
+  }
+
+  /**
    * Upload Excel file and process students
    * POST /api/students/upload
    */
@@ -175,6 +199,8 @@ export class StudentsUploadController {
       }
 
       try {
+        console.log('[UPLOAD] Starting Excel upload process');
+        
         // Log upload attempt
         await auditFromRequest(req, 'CREATE', 'STUDENT', {
           status: 'SUCCESS',
@@ -186,7 +212,27 @@ export class StudentsUploadController {
         }).catch(console.error);
         
         // Parse Excel file
-        const rows = await studentsUploadService.parseExcelFile(req.file.buffer);
+        console.log('[UPLOAD] Parsing Excel file...');
+        let rows;
+        try {
+          rows = await studentsUploadService.parseExcelFile(req.file.buffer);
+          console.log(`[UPLOAD] Parsed ${rows.length} rows from Excel file`);
+        } catch (parseError) {
+          console.error('[UPLOAD] Error parsing Excel file:', parseError);
+          await auditFromRequest(req, 'CREATE', 'STUDENT', {
+            status: 'FAILURE',
+            errorMessage: parseError instanceof Error ? parseError.message : 'Failed to parse Excel file',
+            details: {
+              action: 'EXCEL_UPLOAD_PARSE_ERROR',
+              fileName: req.file.originalname,
+            },
+          }).catch(console.error);
+          return res.status(400).json({ 
+            error: 'Failed to parse Excel file',
+            message: parseError instanceof Error ? parseError.message : 'Unknown error',
+            messageHebrew: 'שגיאה בקריאת קובץ Excel. אנא ודא שהקובץ תקין.',
+          });
+        }
 
         if (rows.length === 0) {
           await auditFromRequest(req, 'CREATE', 'STUDENT', {
@@ -196,10 +242,100 @@ export class StudentsUploadController {
           return res.status(400).json({ error: 'Excel file is empty or invalid' });
         }
 
+        // Validate all rows first to detect conflicts
+        console.log('[UPLOAD] Starting validation...');
+        let validationResult;
+        try {
+          validationResult = await studentsUploadService.validateExcelData(rows);
+          console.log(`[UPLOAD] Validation completed: ${validationResult.conflicts.length} conflicts, ${validationResult.validRows} valid rows`);
+        } catch (validationError) {
+          console.error('[UPLOAD] Error during validation:', validationError);
+          console.error('[UPLOAD] Validation error stack:', validationError instanceof Error ? validationError.stack : 'No stack trace');
+          await auditFromRequest(req, 'CREATE', 'STUDENT', {
+            status: 'FAILURE',
+            errorMessage: validationError instanceof Error ? validationError.message : 'Validation failed',
+            details: {
+              action: 'EXCEL_UPLOAD_VALIDATION_ERROR',
+              fileName: req.file.originalname,
+              totalRows: rows.length,
+              errorStack: validationError instanceof Error ? validationError.stack : undefined,
+            },
+          }).catch(console.error);
+          
+          return res.status(500).json({
+            error: 'Validation failed',
+            message: validationError instanceof Error ? validationError.message : 'An error occurred during validation',
+            messageHebrew: 'שגיאה באימות הקובץ. אנא בדוק את הקובץ ונסה שוב.',
+          });
+        }
+
+        // Check if user wants to proceed despite conflicts (query parameter)
+        const proceedWithConflicts = req.query.proceed === 'true' || req.query.proceed === '1';
+
+        // If there are conflicts and user hasn't confirmed, return conflicts
+        if (validationResult.conflicts.length > 0 && !proceedWithConflicts) {
+          await auditFromRequest(req, 'CREATE', 'STUDENT', {
+            status: 'SUCCESS',
+            details: {
+              action: 'EXCEL_UPLOAD_VALIDATION',
+              fileName: req.file.originalname,
+              totalRows: rows.length,
+              conflicts: validationResult.conflicts.length,
+              validRows: validationResult.validRows,
+            },
+          }).catch(console.error);
+
+          const response = {
+            message: 'Validation completed with conflicts',
+            hasConflicts: true,
+            summary: {
+              totalRows: rows.length,
+              validRows: validationResult.validRows,
+              conflictsCount: validationResult.conflicts.length,
+            },
+            conflicts: validationResult.conflicts,
+          };
+          
+          console.log('[UPLOAD] Returning conflicts response:', {
+            conflictsCount: validationResult.conflicts.length,
+            conflictsPreview: validationResult.conflicts.slice(0, 2).map(c => ({
+              row: c.row,
+              conflictsCount: c.conflicts.length,
+            })),
+          });
+          
+          try {
+            return res.status(200).json(response);
+          } catch (jsonError) {
+            console.error('[UPLOAD] Error serializing JSON response:', jsonError);
+            console.error('[UPLOAD] Response data:', JSON.stringify(response, null, 2).substring(0, 1000));
+            throw jsonError;
+          }
+        }
+
         // Process data with batch processing for large files
         // Batch size: 50 rows at a time for better performance
+        console.log('[UPLOAD] Starting data processing...');
         const batchSize = rows.length > 1000 ? 50 : 100; // Smaller batches for very large files
-        const result = await studentsUploadService.processExcelData(rows, batchSize);
+        let result;
+        try {
+          result = await studentsUploadService.processExcelData(rows, batchSize);
+          console.log(`[UPLOAD] Processing completed: ${result.created} created, ${result.updated} updated, ${result.errors.length} errors`);
+        } catch (processError) {
+          console.error('[UPLOAD] Error during processing:', processError);
+          console.error('[UPLOAD] Process error stack:', processError instanceof Error ? processError.stack : 'No stack trace');
+          await auditFromRequest(req, 'CREATE', 'STUDENT', {
+            status: 'FAILURE',
+            errorMessage: processError instanceof Error ? processError.message : 'Processing failed',
+            details: {
+              action: 'EXCEL_UPLOAD_PROCESS_ERROR',
+              fileName: req.file.originalname,
+              totalRows: rows.length,
+              errorStack: processError instanceof Error ? processError.stack : undefined,
+            },
+          }).catch(console.error);
+          throw processError; // Re-throw to be caught by outer catch
+        }
 
         // Log successful upload
         await auditFromRequest(req, 'CREATE', 'STUDENT', {
@@ -211,27 +347,40 @@ export class StudentsUploadController {
             created: result.created,
             updated: result.updated,
             errors: result.errors.length,
+            conflictsResolved: validationResult.conflicts.length,
           },
         }).catch(console.error);
 
         res.json({
           message: 'File processed successfully',
+          hasConflicts: validationResult.conflicts.length > 0,
           summary: {
             totalRows: rows.length,
             created: result.created,
             updated: result.updated,
             errors: result.errors.length,
+            conflictsResolved: validationResult.conflicts.length,
           },
           errors: result.errors,
+          conflicts: validationResult.conflicts.length > 0 ? validationResult.conflicts : undefined,
         });
       } catch (error) {
-        // Log failed upload
+        // Log failed upload with detailed error information
+        console.error('[UPLOAD] Fatal error in upload process:', error);
+        console.error('[UPLOAD] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+        console.error('[UPLOAD] Error details:', {
+          name: error instanceof Error ? error.name : 'Unknown',
+          message: error instanceof Error ? error.message : String(error),
+        });
+        
         await auditFromRequest(req, 'CREATE', 'STUDENT', {
           status: 'FAILURE',
           errorMessage: error instanceof Error ? error.message : 'Unknown error',
           details: {
             action: 'EXCEL_UPLOAD_FAILED',
             fileName: req.file?.originalname,
+            errorName: error instanceof Error ? error.name : 'Unknown',
+            errorStack: error instanceof Error ? error.stack : undefined,
           },
         }).catch(console.error);
         next(error);

@@ -8,32 +8,39 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 /**
- * Create a new Prisma Client instance
- */
-function createPrismaClient(): PrismaClient {
-  // Only log queries if explicitly enabled via PRISMA_LOG_QUERIES env var
-  // This reduces console noise in development
-  const shouldLogQueries = process.env.PRISMA_LOG_QUERIES === 'true';
-  const logLevels: Array<'query' | 'info' | 'warn' | 'error'> = shouldLogQueries 
-    ? ['query', 'error', 'warn'] 
-    : process.env.NODE_ENV === 'development' 
-      ? ['error', 'warn'] 
-      : ['error'];
-  
-  return new PrismaClient({
-    log: logLevels,
-    // SQLite doesn't support connection pooling, but we can configure other options
-    // For SQLite, we rely on retry logic and query simplification instead
-  });
-}
-
-/**
  * Get or create Prisma Client instance
  * Always returns the current instance from global
  */
 function getPrismaClient(): PrismaClient {
   if (!globalForPrisma.prisma) {
-    globalForPrisma.prisma = createPrismaClient();
+    // Initialize synchronously - PRAGMA settings will be set on first query
+    // This avoids blocking module initialization
+    globalForPrisma.prisma = new PrismaClient({
+      log: process.env.PRISMA_LOG_QUERIES === 'true' 
+        ? ['query', 'error', 'warn'] 
+        : process.env.NODE_ENV === 'development' 
+          ? ['error', 'warn'] 
+          : ['error'],
+    });
+    
+    // Configure SQLite settings asynchronously after initialization
+    // This won't block the module from loading
+    // Note: Use $queryRaw instead of $executeRaw for PRAGMA statements in SQLite
+    // because PRAGMA returns results and $executeRaw doesn't allow results
+    (async () => {
+      try {
+        const client = globalForPrisma.prisma!;
+        // PRAGMA statements return results, so we use $queryRaw and ignore the result
+        await client.$queryRaw`PRAGMA journal_mode = WAL;`;
+        await client.$queryRaw`PRAGMA busy_timeout = 30000;`;
+        await client.$queryRaw`PRAGMA synchronous = NORMAL;`;
+        await client.$queryRaw`PRAGMA cache_size = -64000;`;
+        await client.$queryRaw`PRAGMA foreign_keys = ON;`;
+        logger.debug('SQLite WAL mode and connection settings configured');
+      } catch (error) {
+        logger.warn({ error: (error as Error).message }, 'Failed to configure SQLite PRAGMA settings');
+      }
+    })();
   }
   return globalForPrisma.prisma;
 }
@@ -50,7 +57,29 @@ async function recreatePrismaClient(): Promise<PrismaClient> {
     }
   }
   
-  globalForPrisma.prisma = createPrismaClient();
+  // Create new client and configure SQLite settings
+  const client = new PrismaClient({
+    log: process.env.PRISMA_LOG_QUERIES === 'true' 
+      ? ['query', 'error', 'warn'] 
+      : process.env.NODE_ENV === 'development' 
+        ? ['error', 'warn'] 
+        : ['error'],
+  });
+
+  // Configure SQLite settings
+  // Note: Use $queryRaw instead of $executeRaw for PRAGMA statements in SQLite
+  // because PRAGMA returns results and $executeRaw doesn't allow results
+  try {
+    await client.$queryRaw`PRAGMA journal_mode = WAL;`;
+    await client.$queryRaw`PRAGMA busy_timeout = 30000;`;
+    await client.$queryRaw`PRAGMA synchronous = NORMAL;`;
+    await client.$queryRaw`PRAGMA cache_size = -64000;`;
+    await client.$queryRaw`PRAGMA foreign_keys = ON;`;
+  } catch (error) {
+    logger.warn({ error: (error as Error).message }, 'Failed to configure SQLite PRAGMA settings after recreation');
+  }
+
+  globalForPrisma.prisma = client;
   logger.warn('Prisma Client recreated after panic');
   return globalForPrisma.prisma;
 }

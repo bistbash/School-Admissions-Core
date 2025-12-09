@@ -1,6 +1,7 @@
 import { prisma } from '../../lib/database/prisma';
 import { AuditAction, AuditResource, AuditStatus } from '../../lib/audit/audit';
 import { socCache, getAuditLogsCacheKey, getStatsCacheKey, invalidateSOCCache } from '../../lib/soc/soc-cache';
+import { retryPrismaOperation } from '../../lib/database/prisma-retry';
 
 export interface AuditLogFilter {
   userId?: number;
@@ -126,14 +127,16 @@ export class SOCService {
       where.ipAddress = { contains: filter.ipAddress };
     }
 
-    const logs = await prisma.auditLog.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-      take: filter.limit || 100,
-      skip: filter.offset || 0,
-    });
+    const logs = await retryPrismaOperation(() =>
+      prisma.auditLog.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        take: filter.limit || 100,
+        skip: filter.offset || 0,
+      })
+    );
 
-    const total = await prisma.auditLog.count({ where });
+    const total = await retryPrismaOperation(() => prisma.auditLog.count({ where }));
 
     const result = {
       logs: logs.map(log => ({
@@ -156,6 +159,7 @@ export class SOCService {
 
   /**
    * Get audit log statistics
+   * Uses database aggregations instead of loading all records into memory
    */
   async getAuditStats(filter: Omit<AuditLogFilter, 'limit' | 'offset'> = {}): Promise<AuditLogStats> {
     // Check cache
@@ -177,81 +181,173 @@ export class SOCService {
       }
     }
 
-    const allLogs = await prisma.auditLog.findMany({
-      where,
-      select: {
-        action: true,
-        resource: true,
-        status: true,
-        userEmail: true,
-        createdAt: true,
-        incidentStatus: true,
-        priority: true,
-        assignedTo: true,
-      },
-    });
+    const oneDayAgo = new Date();
+    oneDayAgo.setDate(oneDayAgo.getDate() - 1);
 
+    // Use database aggregations instead of loading all records
+    // This is much more efficient, especially for large datasets
+    const [
+      totalLogs,
+      actionGroups,
+      resourceGroups,
+      statusGroups,
+      userGroups,
+      recentFailuresCount,
+      recentUnauthorizedCount,
+      incidentStatusGroups,
+      priorityGroups,
+      unassignedIncidentsCount,
+      openIncidentsCount,
+    ] = await Promise.all([
+      // Total count
+      retryPrismaOperation(() => prisma.auditLog.count({ where })),
+      
+      // Group by action
+      retryPrismaOperation(() => 
+        prisma.auditLog.groupBy({
+          by: ['action'],
+          where,
+          _count: { action: true },
+        })
+      ),
+      
+      // Group by resource
+      retryPrismaOperation(() =>
+        prisma.auditLog.groupBy({
+          by: ['resource'],
+          where,
+          _count: { resource: true },
+        })
+      ),
+      
+      // Group by status
+      retryPrismaOperation(() =>
+        prisma.auditLog.groupBy({
+          by: ['status'],
+          where,
+          _count: { status: true },
+        })
+      ),
+      
+      // Group by user email
+      retryPrismaOperation(() =>
+        prisma.auditLog.groupBy({
+          by: ['userEmail'],
+          where,
+          _count: { userEmail: true },
+        })
+      ),
+      
+      // Recent failures (last 24 hours)
+      retryPrismaOperation(() =>
+        prisma.auditLog.count({
+          where: {
+            ...where,
+            status: 'FAILURE',
+            createdAt: { gte: oneDayAgo },
+          },
+        })
+      ),
+      
+      // Recent unauthorized access (last 24 hours)
+      retryPrismaOperation(() =>
+        prisma.auditLog.count({
+          where: {
+            ...where,
+            action: { in: ['AUTH_FAILED', 'UNAUTHORIZED_ACCESS'] },
+            createdAt: { gte: oneDayAgo },
+          },
+        })
+      ),
+      
+      // Group by incident status
+      retryPrismaOperation(() =>
+        prisma.auditLog.groupBy({
+          by: ['incidentStatus'],
+          where: {
+            ...where,
+            incidentStatus: { not: null },
+          },
+          _count: { incidentStatus: true },
+        })
+      ),
+      
+      // Group by priority
+      retryPrismaOperation(() =>
+        prisma.auditLog.groupBy({
+          by: ['priority'],
+          where: {
+            ...where,
+            priority: { not: null },
+          },
+          _count: { priority: true },
+        })
+      ),
+      
+      // Unassigned incidents
+      retryPrismaOperation(() =>
+        prisma.auditLog.count({
+          where: {
+            ...where,
+            incidentStatus: { in: ['NEW', 'INVESTIGATING', 'ESCALATED'] },
+            assignedTo: null,
+          },
+        })
+      ),
+      
+      // Open incidents
+      retryPrismaOperation(() =>
+        prisma.auditLog.count({
+          where: {
+            ...where,
+            incidentStatus: { in: ['NEW', 'INVESTIGATING', 'ESCALATED'] },
+          },
+        })
+      ),
+    ]);
+
+    // Build stats object from aggregated results
     const stats: AuditLogStats = {
-      totalLogs: allLogs.length,
+      totalLogs,
       byAction: {},
       byResource: {},
       byStatus: {},
       byUser: {},
-      recentFailures: 0,
-      recentUnauthorized: 0,
+      recentFailures: recentFailuresCount,
+      recentUnauthorized: recentUnauthorizedCount,
       byIncidentStatus: {},
       byPriority: {},
-      unassignedIncidents: 0,
-      openIncidents: 0,
+      unassignedIncidents: unassignedIncidentsCount,
+      openIncidents: openIncidentsCount,
     };
 
-    const oneDayAgo = new Date();
-    oneDayAgo.setDate(oneDayAgo.getDate() - 1);
+    // Convert groupBy results to objects
+    for (const group of actionGroups) {
+      stats.byAction[group.action] = group._count.action;
+    }
 
-    for (const log of allLogs) {
-      // Count by action
-      stats.byAction[log.action] = (stats.byAction[log.action] || 0) + 1;
+    for (const group of resourceGroups) {
+      stats.byResource[group.resource] = group._count.resource;
+    }
 
-      // Count by resource
-      stats.byResource[log.resource] = (stats.byResource[log.resource] || 0) + 1;
+    for (const group of statusGroups) {
+      stats.byStatus[group.status] = group._count.status;
+    }
 
-      // Count by status
-      stats.byStatus[log.status] = (stats.byStatus[log.status] || 0) + 1;
+    for (const group of userGroups) {
+      const user = group.userEmail || 'anonymous';
+      stats.byUser[user] = group._count.userEmail;
+    }
 
-      // Count by user
-      const user = log.userEmail || 'anonymous';
-      stats.byUser[user] = (stats.byUser[user] || 0) + 1;
-
-      // Count recent failures
-      if (log.status === 'FAILURE' && log.createdAt >= oneDayAgo) {
-        stats.recentFailures++;
+    for (const group of incidentStatusGroups) {
+      if (group.incidentStatus) {
+        stats.byIncidentStatus[group.incidentStatus] = group._count.incidentStatus;
       }
+    }
 
-      // Count recent unauthorized access
-      if (log.action === 'AUTH_FAILED' || log.action === 'UNAUTHORIZED_ACCESS') {
-        if (log.createdAt >= oneDayAgo) {
-          stats.recentUnauthorized++;
-        }
-      }
-
-      // Count by incident status
-      if (log.incidentStatus) {
-        stats.byIncidentStatus[log.incidentStatus] = (stats.byIncidentStatus[log.incidentStatus] || 0) + 1;
-      }
-
-      // Count by priority
-      if (log.priority) {
-        stats.byPriority[log.priority] = (stats.byPriority[log.priority] || 0) + 1;
-      }
-
-      // Count unassigned incidents
-      if (log.incidentStatus && log.incidentStatus !== 'RESOLVED' && log.incidentStatus !== 'FALSE_POSITIVE' && !log.assignedTo) {
-        stats.unassignedIncidents++;
-      }
-
-      // Count open incidents
-      if (log.incidentStatus && log.incidentStatus !== 'RESOLVED' && log.incidentStatus !== 'FALSE_POSITIVE') {
-        stats.openIncidents++;
+    for (const group of priorityGroups) {
+      if (group.priority) {
+        stats.byPriority[group.priority] = group._count.priority;
       }
     }
 
@@ -268,21 +364,23 @@ export class SOCService {
     const oneDayAgo = new Date();
     oneDayAgo.setDate(oneDayAgo.getDate() - 1);
 
-    const alerts = await prisma.auditLog.findMany({
-      where: {
-        OR: [
-          { action: 'LOGIN_FAILED' },
-          { action: 'AUTH_FAILED' },
-          { action: 'UNAUTHORIZED_ACCESS' },
-          { status: 'FAILURE' },
-        ],
-        createdAt: {
-          gte: oneDayAgo,
+    const alerts = await retryPrismaOperation(() =>
+      prisma.auditLog.findMany({
+        where: {
+          OR: [
+            { action: 'LOGIN_FAILED' },
+            { action: 'AUTH_FAILED' },
+            { action: 'UNAUTHORIZED_ACCESS' },
+            { status: 'FAILURE' },
+          ],
+          createdAt: {
+            gte: oneDayAgo,
+          },
         },
-      },
-      orderBy: { createdAt: 'desc' },
-      take: limit,
-    });
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+      })
+    );
 
     return alerts.map(alert => ({
       ...alert,
@@ -294,17 +392,19 @@ export class SOCService {
    * Get open incidents (events that need attention)
    */
   async getOpenIncidents(limit: number = 100) {
-    const incidents = await prisma.auditLog.findMany({
-      where: {
-        incidentStatus: {
-          in: ['NEW', 'INVESTIGATING', 'ESCALATED'],
+    const incidents = await retryPrismaOperation(() =>
+      prisma.auditLog.findMany({
+        where: {
+          incidentStatus: {
+            in: ['NEW', 'INVESTIGATING', 'ESCALATED'],
+          },
         },
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-      take: limit,
-    });
+        orderBy: {
+          createdAt: 'desc',
+        },
+        take: limit,
+      })
+    );
 
     // Sort by priority manually (since priority can be null)
     const priorityOrder = { CRITICAL: 4, HIGH: 3, MEDIUM: 2, LOW: 1 };
@@ -338,10 +438,12 @@ export class SOCService {
       }
     }
 
-    const updated = await prisma.auditLog.update({
-      where: { id: logId },
-      data: updateData,
-    });
+    const updated = await retryPrismaOperation(() =>
+      prisma.auditLog.update({
+        where: { id: logId },
+        data: updateData,
+      })
+    );
 
     // Invalidate cache when incidents are updated
     invalidateSOCCache();
@@ -370,15 +472,17 @@ export class SOCService {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
 
-    const logs = await prisma.auditLog.findMany({
-      where: {
-        userId,
-        createdAt: {
-          gte: startDate,
+    const logs = await retryPrismaOperation(() =>
+      prisma.auditLog.findMany({
+        where: {
+          userId,
+          createdAt: {
+            gte: startDate,
+          },
         },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+        orderBy: { createdAt: 'desc' },
+      })
+    );
 
     return logs.map(log => ({
       ...log,
@@ -390,14 +494,16 @@ export class SOCService {
    * Get resource access history
    */
   async getResourceHistory(resource: AuditResource, resourceId: number) {
-    const logs = await prisma.auditLog.findMany({
-      where: {
-        resource,
-        resourceId,
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 100,
-    });
+    const logs = await retryPrismaOperation(() =>
+      prisma.auditLog.findMany({
+        where: {
+          resource,
+          resourceId,
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 100,
+      })
+    );
 
     return logs.map(log => ({
       ...log,
@@ -417,10 +523,12 @@ export class SOCService {
         { expiresAt: { gt: new Date() } },
       ];
     }
-    return prisma.blockedIP.findMany({
-      where,
-      orderBy: { blockedAt: 'desc' },
-    });
+    return retryPrismaOperation(() =>
+      prisma.blockedIP.findMany({
+        where,
+        orderBy: { blockedAt: 'desc' },
+      })
+    );
   }
 
   /**

@@ -512,3 +512,29 @@ export function requireResourcePermission(resource: string, action: string) {
   };
 }
 
+/**
+ * Middleware to restrict endpoint to development environment only
+ * SECURITY: This should only be used for testing/development endpoints
+ * Usage: requireDevelopmentOnly
+ */
+export function requireDevelopmentOnly(req: Request, res: Response, next: NextFunction) {
+  if (process.env.NODE_ENV !== 'development') {
+    // Log unauthorized access attempt in production
+    auditFromRequest(req, 'UNAUTHORIZED_ACCESS', 'ENVIRONMENT', {
+      status: 'FAILURE',
+      errorMessage: 'Development-only endpoint accessed in non-development environment',
+      details: {
+        endpoint: req.path,
+        method: req.method,
+        environment: process.env.NODE_ENV,
+      },
+    }).catch(console.error);
+    
+    return res.status(403).json({
+      error: 'This endpoint is only available in development environment',
+    });
+  }
+  
+  next();
+}
+

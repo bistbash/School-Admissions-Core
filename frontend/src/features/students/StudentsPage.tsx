@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Upload, Search, Filter, GraduationCap } from 'lucide-react';
+import { Plus, Upload, Search, Filter, GraduationCap, Trash2, AlertTriangle } from 'lucide-react';
 import { Button } from '../../shared/ui/Button';
 import { Input } from '../../shared/ui/Input';
 import { Card, CardContent, CardHeader, CardTitle } from '../../shared/ui/Card';
@@ -127,6 +127,45 @@ export function StudentsPage() {
 
   const hasActiveFilters = Object.values(filters).some((v) => v !== '') || searchQuery !== '';
 
+  const isDevelopment = import.meta.env.DEV || import.meta.env.MODE === 'development';
+
+  const handleDeleteAll = async () => {
+    if (!isDevelopment) {
+      alert('פעולה זו זמינה רק בסביבת development');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      '⚠️ אזהרה: פעולה זו תמחק את כל התלמידים מהמערכת!\n\n' +
+      'פעולה זו בלתי הפיכה וזמינה רק בסביבת development.\n\n' +
+      'האם אתה בטוח שברצונך להמשיך?'
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    // Double confirmation
+    const doubleConfirmed = window.confirm(
+      '⚠️ אישור סופי: אתה עומד למחוק את כל התלמידים!\n\n' +
+      'לחץ OK רק אם אתה בטוח לחלוטין.'
+    );
+
+    if (!doubleConfirmed) {
+      return;
+    }
+
+    try {
+      await apiClient.delete('/students/clear-all');
+      alert('כל התלמידים נמחקו בהצלחה');
+      loadStudents();
+    } catch (error: any) {
+      console.error('Failed to delete all students:', error);
+      const errorMessage = error.response?.data?.error || error.message || 'שגיאה לא ידועה';
+      alert(`שגיאה במחיקת התלמידים: ${errorMessage}`);
+    }
+  };
+
   return (
     <PageWrapper>
       <div className="space-y-6 animate-in max-w-7xl mx-auto">
@@ -158,6 +197,17 @@ export function StudentsPage() {
                 <Plus className="h-4 w-4" />
                 הוסף תלמיד
               </Button>
+              {isDevelopment && (
+                <Button
+                  variant="destructive"
+                  onClick={handleDeleteAll}
+                  className="gap-2"
+                  title="זמין רק בסביבת development"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  מחק את כל התלמידים
+                </Button>
+              )}
             </div>
           )}
         </div>

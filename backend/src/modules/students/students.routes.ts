@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { StudentsController } from './students.controller';
 import { StudentsUploadController } from './students-upload.controller';
 import { authenticate } from '../../lib/auth/auth';
-import { requireAPIKey, strictRateLimiter, fileUploadRateLimiter, requireAdmin } from '../../lib/security/security';
+import { requireAPIKey, strictRateLimiter, fileUploadRateLimiter, requireAdmin, requireDevelopmentOnly } from '../../lib/security/security';
 import { requireResourcePagePermission } from '../../lib/permissions/page-permission-middleware';
 import { validateRequest } from '../../lib/utils/validation';
 import { z } from 'zod';
@@ -41,8 +41,10 @@ const updateStudentSchema = z.object({
 });
 
 // Specific routes must come BEFORE parameterized routes (/:id)
-// SECURITY: clear-all requires admin access (first registered user only)
-router.delete('/clear-all', strictRateLimiter, requireAdmin, studentsController.deleteAll.bind(studentsController));
+// SECURITY: clear-all requires admin access AND development environment only
+router.delete('/clear-all', strictRateLimiter, requireDevelopmentOnly, requireAdmin, studentsController.deleteAll.bind(studentsController));
+// Download Excel template - requires 'students' page with 'read' permission
+router.get('/upload/template', requireResourcePagePermission('students', 'read'), studentsUploadController.downloadTemplate.bind(studentsUploadController));
 // File upload with special rate limiting (trusted users get higher limits)
 // Requires 'students' page with 'edit' permission
 router.post('/upload', requireResourcePagePermission('students', 'create'), fileUploadRateLimiter, studentsUploadController.upload.bind(studentsUploadController));
