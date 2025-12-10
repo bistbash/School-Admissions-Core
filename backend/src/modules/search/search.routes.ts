@@ -15,3 +15,4 @@ router.get('/pages/categories', searchController.getPagesByCategory.bind(searchC
 export default router;
 
 
+

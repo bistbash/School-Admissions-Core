@@ -40,7 +40,8 @@ export function AddStudentModal({ isOpen, onClose, onSuccess, cohorts }: AddStud
     grade: '',
     parallel: '',
     track: '',
-    cohortId: '',
+    cohortId: '', // Legacy - kept for backward compatibility
+    cohort: '', // New: can be year (2024) or Gematria ("מחזור נ"ב" or "נ"ב")
     studyStartDate: new Date().toISOString().split('T')[0],
     dateOfBirth: '',
     email: '',
@@ -67,6 +68,8 @@ export function AddStudentModal({ isOpen, onClose, onSuccess, cohorts }: AddStud
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [cohortSuggestions, setCohortSuggestions] = useState<Array<{ value: string; label: string }>>([]);
+  const [showCohortSuggestions, setShowCohortSuggestions] = useState(false);
 
   // Load tracks when modal opens
   React.useEffect(() => {
@@ -74,6 +77,15 @@ export function AddStudentModal({ isOpen, onClose, onSuccess, cohorts }: AddStud
       loadTracks();
     }
   }, [isOpen]);
+
+  // Cleanup timeouts on unmount
+  React.useEffect(() => {
+    return () => {
+      if (cohortTimeoutRef.current) {
+        clearTimeout(cohortTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const loadTracks = async () => {
     try {
@@ -87,23 +99,197 @@ export function AddStudentModal({ isOpen, onClose, onSuccess, cohorts }: AddStud
     }
   };
 
+  // Store timeout ref for debouncing (only for suggestions)
+  const cohortTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+
   const handleChange = (field: string, value: string) => {
+    // Update form data
     setFormData((prev) => ({ ...prev, [field]: value }));
     if (errors[field]) {
       setErrors((prev) => ({ ...prev, [field]: '' }));
     }
+
+    // Only generate cohort suggestions for autocomplete (NO automatic completion)
+    if (field === 'cohort') {
+      generateCohortSuggestions(value);
+      
+      // If user entered a year (4 digits), convert to cohort name
+      if (/^\d{4}$/.test(value.trim())) {
+        const year = parseInt(value.trim(), 10);
+        const matchingCohort = cohorts.find(c => c.startYear === year);
+        if (matchingCohort?.name) {
+          // Update to cohort name and close suggestions
+          setFormData((prev) => ({ ...prev, cohort: matchingCohort.name }));
+          setShowCohortSuggestions(false);
+        }
+      }
+    }
   };
 
-  const validate = (): boolean => {
+  const generateCohortSuggestions = (input: string) => {
+    if (!input || input.length === 0) {
+      setCohortSuggestions([]);
+      setShowCohortSuggestions(false);
+      return;
+    }
+
+    const suggestions: Array<{ value: string; label: string }> = [];
+
+    // Add cohorts from the list that match
+    cohorts.forEach((cohort) => {
+      const nameMatch = cohort.name.toLowerCase().includes(input.toLowerCase());
+      const yearMatch = String(cohort.startYear).includes(input);
+      if (nameMatch || yearMatch) {
+        suggestions.push({
+          value: cohort.name, // Always use cohort name (Gematria)
+          label: cohort.name, // Show only cohort name, not year
+        });
+      }
+    });
+
+    // If input looks like a year (4 digits), find the matching cohort name
+    const yearMatch = /^\d{4}$/.test(input);
+    if (yearMatch) {
+      const year = parseInt(input, 10);
+      if (year >= 1973 && year <= new Date().getFullYear() + 1) {
+        const matchingCohort = cohorts.find(c => c.startYear === year);
+        if (matchingCohort) {
+          suggestions.unshift({
+            value: matchingCohort.name,
+            label: matchingCohort.name,
+          });
+        }
+      }
+    }
+
+    setCohortSuggestions(suggestions.slice(0, 5)); // Limit to 5 suggestions
+    setShowCohortSuggestions(suggestions.length > 0);
+  };
+
+  const validate = async (): Promise<boolean> => {
     const newErrors: Record<string, string> = {};
 
     if (!formData.idNumber.trim()) newErrors.idNumber = 'מספר ת.ז הוא שדה חובה';
     if (!formData.firstName.trim()) newErrors.firstName = 'שם פרטי הוא שדה חובה';
     if (!formData.lastName.trim()) newErrors.lastName = 'שם משפחה הוא שדה חובה';
     if (!formData.gender) newErrors.gender = 'מין הוא שדה חובה';
-    if (!formData.grade) newErrors.grade = 'כיתה היא שדה חובה';
-    if (!formData.cohortId) newErrors.cohortId = 'מחזור הוא שדה חובה';
     if (!formData.studyStartDate) newErrors.studyStartDate = 'תאריך התחלת לימודים הוא שדה חובה';
+
+    // Validate cohort or grade (at least one required)
+    if (!formData.cohort && !formData.cohortId && !formData.grade) {
+      newErrors.cohort = 'נדרש לספק מחזור או כיתה (או שניהם)';
+      newErrors.grade = 'נדרש לספק מחזור או כיתה (או שניהם)';
+    }
+
+    // Validate that cohort, grade, and study start date match
+    // Academic year is from 01.09.x to 01.09.(x+1)
+    if (formData.cohort && formData.grade) {
+      try {
+        const response = await apiClient.post('/cohorts/validate-match', {
+          cohort: formData.cohort,
+          grade: formData.grade,
+        });
+        if (!response.data?.matches) {
+          newErrors.cohort = response.data?.error || 'המחזור והכיתה לא תואמים';
+          newErrors.grade = response.data?.error || 'המחזור והכיתה לא תואמים';
+        }
+      } catch (error: any) {
+        const errorMsg = error.response?.data?.error || 'שגיאה באימות המחזור והכיתה';
+        newErrors.cohort = errorMsg;
+        newErrors.grade = errorMsg;
+      }
+    }
+    
+    // Validate study start date matches cohort and grade
+    // Academic year is from 01.09.x to 01.09.(x+1)
+    // Study start date must be 01.09 of the cohort's start year
+    if (formData.studyStartDate) {
+      const startDate = new Date(formData.studyStartDate);
+      if (isNaN(startDate.getTime())) {
+        newErrors.studyStartDate = 'תאריך התחלת לימודים לא תקין';
+      } else {
+        const dateYear = startDate.getFullYear();
+        const dateMonth = startDate.getMonth() + 1; // 1-12
+        const dateDay = startDate.getDate();
+        
+        // Check if date is September 1st
+        if (dateMonth !== 9 || dateDay !== 1) {
+          newErrors.studyStartDate = 'תאריך התחלת לימודים חייב להיות 01.09 (1 בספטמבר)';
+        } else {
+          // Validate against cohort if provided
+          if (formData.cohort) {
+            try {
+              const response = await apiClient.post('/cohorts/calculate-start-date', {
+                cohort: formData.cohort,
+              });
+              if (response.data?.startYear) {
+                const expectedYear = response.data.startYear;
+                if (dateYear !== expectedYear) {
+                  newErrors.studyStartDate = `תאריך התחלת לימודים צריך להיות 01.09.${expectedYear} לפי המחזור ${formData.cohort}`;
+                }
+              }
+            } catch (error: any) {
+              console.error('Error validating study start date:', error);
+            }
+          }
+          
+          // Validate against grade if provided (via cohort)
+          if (formData.grade && !formData.cohort) {
+            try {
+              const response = await apiClient.post('/cohorts/calculate-cohort', {
+                grade: formData.grade,
+              });
+              if (response.data?.cohort) {
+                const startDateResponse = await apiClient.post('/cohorts/calculate-start-date', {
+                  cohort: response.data.cohort,
+                });
+                if (startDateResponse.data?.startYear) {
+                  const expectedYear = startDateResponse.data.startYear;
+                  if (dateYear !== expectedYear) {
+                    newErrors.studyStartDate = `תאריך התחלת לימודים צריך להיות 01.09.${expectedYear} לפי הכיתה ${formData.grade}`;
+                  }
+                }
+              }
+            } catch (error: any) {
+              console.error('Error validating study start date from grade:', error);
+            }
+          }
+          
+          // If both cohort and grade provided, validate that they match and date is correct
+          if (formData.cohort && formData.grade) {
+            try {
+              // First check if cohort and grade match
+              const matchResponse = await apiClient.post('/cohorts/validate-match', {
+                cohort: formData.cohort,
+                grade: formData.grade,
+              });
+              
+              if (!matchResponse.data?.matches) {
+                newErrors.cohort = matchResponse.data?.error || 'המחזור והכיתה לא תואמים';
+                newErrors.grade = matchResponse.data?.error || 'המחזור והכיתה לא תואמים';
+              } else {
+                // If they match, validate the date
+                const cohortResponse = await apiClient.post('/cohorts/calculate-start-date', {
+                  cohort: formData.cohort,
+                });
+                
+                if (cohortResponse.data?.startYear) {
+                  const expectedYear = cohortResponse.data.startYear;
+                  if (dateYear !== expectedYear) {
+                    newErrors.studyStartDate = `תאריך התחלת לימודים צריך להיות 01.09.${expectedYear} לפי המחזור ${formData.cohort} והכיתה ${formData.grade}`;
+                  }
+                }
+              }
+            } catch (error: any) {
+              const errorMsg = error.response?.data?.error || 'שגיאה באימות המחזור, הכיתה ותאריך ההתחלה';
+              newErrors.cohort = errorMsg;
+              newErrors.grade = errorMsg;
+              newErrors.studyStartDate = errorMsg;
+            }
+          }
+        }
+      }
+    }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -112,42 +298,107 @@ export function AddStudentModal({ isOpen, onClose, onSuccess, cohorts }: AddStud
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!validate()) return;
+    if (!(await validate())) return;
 
     try {
       setIsSubmitting(true);
-      const payload = {
+      const payload: any = {
         idNumber: formData.idNumber.trim(),
         firstName: formData.firstName.trim(),
         lastName: formData.lastName.trim(),
         gender: formData.gender,
-        grade: formData.grade,
         parallel: formData.parallel || undefined,
         track: formData.track || undefined,
-        cohortId: Number(formData.cohortId),
         studyStartDate: new Date(formData.studyStartDate).toISOString(),
-        dateOfBirth: formData.dateOfBirth ? new Date(formData.dateOfBirth).toISOString() : undefined,
-        email: formData.email.trim() || undefined,
-        aliyahDate: formData.aliyahDate ? new Date(formData.aliyahDate).toISOString() : undefined,
-        locality: formData.locality.trim() || undefined,
-        address: formData.address.trim() || undefined,
-        address2: formData.address2.trim() || undefined,
-        locality2: formData.locality2.trim() || undefined,
-        phone: formData.phone.trim() || undefined,
-        mobilePhone: formData.mobilePhone.trim() || undefined,
-        parent1IdNumber: formData.parent1IdNumber.trim() || undefined,
-        parent1FirstName: formData.parent1FirstName.trim() || undefined,
-        parent1LastName: formData.parent1LastName.trim() || undefined,
-        parent1Type: formData.parent1Type.trim() || undefined,
-        parent1Mobile: formData.parent1Mobile.trim() || undefined,
-        parent1Email: formData.parent1Email.trim() || undefined,
-        parent2IdNumber: formData.parent2IdNumber.trim() || undefined,
-        parent2FirstName: formData.parent2FirstName.trim() || undefined,
-        parent2LastName: formData.parent2LastName.trim() || undefined,
-        parent2Type: formData.parent2Type.trim() || undefined,
-        parent2Mobile: formData.parent2Mobile.trim() || undefined,
-        parent2Email: formData.parent2Email.trim() || undefined,
       };
+
+      // Add cohort or grade (or both)
+      if (formData.cohort) {
+        // If it's a year (4 digits), convert to cohort name first
+        let cohortValue = formData.cohort.trim();
+        if (/^\d{4}$/.test(cohortValue)) {
+          // It's a year - find the cohort name
+          const year = parseInt(cohortValue, 10);
+          const matchingCohort = cohorts.find(c => c.startYear === year);
+          if (matchingCohort) {
+            cohortValue = matchingCohort.name;
+          }
+        }
+        // Send as string (cohort name) or number (if it's a valid year that wasn't found)
+        payload.cohort = /^\d+$/.test(cohortValue) ? Number(cohortValue) : cohortValue;
+      } else if (formData.cohortId) {
+        // Legacy support
+        payload.cohortId = Number(formData.cohortId);
+      }
+
+      if (formData.grade) {
+        payload.grade = formData.grade;
+      }
+
+      // Add additional fields
+      if (formData.dateOfBirth) {
+        payload.dateOfBirth = new Date(formData.dateOfBirth).toISOString();
+      }
+      if (formData.email.trim()) {
+        payload.email = formData.email.trim();
+      }
+      if (formData.aliyahDate) {
+        payload.aliyahDate = new Date(formData.aliyahDate).toISOString();
+      }
+      if (formData.locality.trim()) {
+        payload.locality = formData.locality.trim();
+      }
+      if (formData.address.trim()) {
+        payload.address = formData.address.trim();
+      }
+      if (formData.address2.trim()) {
+        payload.address2 = formData.address2.trim();
+      }
+      if (formData.locality2.trim()) {
+        payload.locality2 = formData.locality2.trim();
+      }
+      if (formData.phone.trim()) {
+        payload.phone = formData.phone.trim();
+      }
+      if (formData.mobilePhone.trim()) {
+        payload.mobilePhone = formData.mobilePhone.trim();
+      }
+      if (formData.parent1IdNumber.trim()) {
+        payload.parent1IdNumber = formData.parent1IdNumber.trim();
+      }
+      if (formData.parent1FirstName.trim()) {
+        payload.parent1FirstName = formData.parent1FirstName.trim();
+      }
+      if (formData.parent1LastName.trim()) {
+        payload.parent1LastName = formData.parent1LastName.trim();
+      }
+      if (formData.parent1Type.trim()) {
+        payload.parent1Type = formData.parent1Type.trim();
+      }
+      if (formData.parent1Mobile.trim()) {
+        payload.parent1Mobile = formData.parent1Mobile.trim();
+      }
+      if (formData.parent1Email.trim()) {
+        payload.parent1Email = formData.parent1Email.trim();
+      }
+      if (formData.parent2IdNumber.trim()) {
+        payload.parent2IdNumber = formData.parent2IdNumber.trim();
+      }
+      if (formData.parent2FirstName.trim()) {
+        payload.parent2FirstName = formData.parent2FirstName.trim();
+      }
+      if (formData.parent2LastName.trim()) {
+        payload.parent2LastName = formData.parent2LastName.trim();
+      }
+      if (formData.parent2Type.trim()) {
+        payload.parent2Type = formData.parent2Type.trim();
+      }
+      if (formData.parent2Mobile.trim()) {
+        payload.parent2Mobile = formData.parent2Mobile.trim();
+      }
+      if (formData.parent2Email.trim()) {
+        payload.parent2Email = formData.parent2Email.trim();
+      }
 
       await apiClient.post('/students', payload);
       onSuccess();
@@ -170,6 +421,7 @@ export function AddStudentModal({ isOpen, onClose, onSuccess, cohorts }: AddStud
         parallel: '',
         track: '',
         cohortId: '',
+        cohort: '',
         studyStartDate: new Date().toISOString().split('T')[0],
         dateOfBirth: '',
         email: '',
@@ -275,7 +527,7 @@ export function AddStudentModal({ isOpen, onClose, onSuccess, cohorts }: AddStud
           <TabsContent value="academic" className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Select
-                label="כיתה *"
+                label="כיתה"
                 value={formData.grade}
                 onChange={(e) => handleChange('grade', e.target.value)}
                 error={errors.grade}
@@ -288,7 +540,6 @@ export function AddStudentModal({ isOpen, onClose, onSuccess, cohorts }: AddStud
                   { value: 'י"ג', label: 'י"ג' },
                   { value: 'י"ד', label: 'י"ד' },
                 ]}
-                required
               />
               <Select
                 label="מקבילה"
@@ -321,20 +572,49 @@ export function AddStudentModal({ isOpen, onClose, onSuccess, cohorts }: AddStud
                 ]}
                 disabled={isLoadingTracks}
               />
-              <Select
-                label="מחזור *"
-                value={formData.cohortId}
-                onChange={(e) => handleChange('cohortId', e.target.value)}
-                error={errors.cohortId}
-                options={[
-                  { value: '', label: 'בחר מחזור' },
-                  ...cohorts.map((cohort) => ({
-                    value: String(cohort.id),
-                    label: cohort.name,
-                  })),
-                ]}
-                required
-              />
+              <div className="relative">
+                <Input
+                  label="מחזור"
+                  value={formData.cohort}
+                  onChange={(e) => handleChange('cohort', e.target.value)}
+                  onFocus={() => {
+                    if (formData.cohort) {
+                      generateCohortSuggestions(formData.cohort);
+                    }
+                  }}
+                  onBlur={(e) => {
+                    // Delay hiding suggestions to allow clicking on them
+                    // Check if focus is moving to suggestions dropdown
+                    const relatedTarget = (e.relatedTarget as HTMLElement);
+                    if (!relatedTarget || !relatedTarget.closest('.cohort-suggestions')) {
+                      setTimeout(() => setShowCohortSuggestions(false), 200);
+                    }
+                  }}
+                  error={errors.cohort || errors.cohortId}
+                  placeholder="הזן מחזור (שנה או גימטריה)"
+                />
+                {showCohortSuggestions && cohortSuggestions.length > 0 && (
+                  <div className="cohort-suggestions absolute z-10 w-full mt-1 bg-white dark:bg-[#080808] border border-gray-200 dark:border-[#1F1F1F] rounded-lg shadow-lg max-h-48 overflow-auto animate-in fade-in slide-in-from-top-2 duration-200">
+                    {cohortSuggestions.map((suggestion, index) => (
+                      <button
+                        key={index}
+                        type="button"
+                        className="w-full text-right px-3 py-2 hover:bg-gray-100 dark:hover:bg-[#1F1F1F] text-sm transition-colors duration-150"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleChange('cohort', suggestion.value);
+                          // Close popup immediately when selection is made
+                          setShowCohortSuggestions(false);
+                        }}
+                        onMouseDown={(e) => e.preventDefault()} // Prevent input blur
+                      >
+                        {suggestion.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               <Input
                 label="תאריך התחלת לימודים *"
                 type="date"

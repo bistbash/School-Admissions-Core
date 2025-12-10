@@ -21,13 +21,23 @@ const createStudentSchema = z.object({
   gender: z.enum(['MALE', 'FEMALE']),
   grade: z.enum(['ט\'', 'י\'', 'י"א', 'י"ב', 'י"ג', 'י"ד'], {
     errorMap: () => ({ message: 'Grade must be ט\', י\', י"א, י"ב, י"ג, or י"ד' }),
-  }),
+  }).optional(), // Optional - will be calculated from cohort if not provided
   parallel: z.enum(['1', '2', '3', '4', '5', '6', '7', '8']).optional(),
   track: z.string().optional(),
-  cohortId: z.number().int().positive('Cohort ID must be a positive integer'),
+  cohortId: z.number().int().positive('Cohort ID must be a positive integer').optional(), // Legacy - use cohort instead
+  cohort: z.union([
+    z.string().min(1, 'Cohort must be a year (e.g., 2024) or Gematria (e.g., "מחזור נ"ב" or "נ"ב")'),
+    z.number().int().min(1973, 'Cohort year must be 1973 or later'),
+  ]).optional(), // Optional - can be year (2024) or Gematria string ("מחזור נ"ב" or "נ"ב")
   studyStartDate: z.string().datetime({ message: 'Study start date must be a valid ISO date string' })
     .or(z.date({ message: 'Study start date must be a valid date' })),
-});
+}).refine(
+  (data) => data.cohort || data.cohortId || data.grade,
+  {
+    message: 'נדרש לספק מחזור (cohort) או כיתה (grade) - לפחות אחד מהם',
+    path: ['cohort'],
+  }
+);
 
 const updateStudentSchema = z.object({
   firstName: z.string().min(1).optional(),

@@ -8,10 +8,11 @@ export interface CreateStudentData {
   firstName: string;
   lastName: string;
   gender: 'MALE' | 'FEMALE';
-  grade: string; // י', י"א, י"ב, י"ג, י"ד
+  grade?: string; // י', י"א, י"ב, י"ג, י"ד - optional, will be calculated from cohort if not provided
   parallel?: string;
   track?: string;
-  cohortId: number; // Required - cohort with startYear
+  cohortId?: number; // Optional - cohort ID (legacy)
+  cohort?: string | number; // Optional - cohort as year (2024) or Gematria ("מחזור נ"ב" or "נ"ב")
   studyStartDate: Date | string; // Required - date when student started studying
   academicYear?: number; // Optional - defaults to current academic year
   // Additional fields
@@ -168,6 +169,10 @@ export class StudentsService {
   /**
    * Create a new student
    * Uses transaction to ensure atomicity of student and enrollment creation
+   * Supports automatic completion:
+   * - If cohort is provided, calculates grade automatically
+   * - If grade is provided, calculates cohort automatically
+   * - Validates that cohort and grade match if both are provided
    */
   async create(data: CreateStudentData) {
     return prisma.$transaction(async (tx) => {
@@ -180,9 +185,69 @@ export class StudentsService {
         throw new ValidationError('Student with this ID number already exists');
       }
 
-      // Verify cohort exists
+      // Import CohortsService for cohort operations
+      const { CohortsService, parseCohortInput } = await import('../cohorts/cohorts.service');
+      const cohortsService = new CohortsService();
+
+      let cohortId: number;
+      let finalGrade: string;
+
+      // Determine cohort and grade with automatic completion
+      if (data.cohort || data.cohortId) {
+        // Cohort is provided (either as string/number or ID)
+        let cohortStartYear: number;
+        
+        if (data.cohort) {
+          // Parse cohort input (year or Gematria)
+          cohortStartYear = parseCohortInput(data.cohort);
+          cohortId = await cohortsService.findOrCreateCohortByInput(data.cohort);
+        } else if (data.cohortId) {
+          // Legacy: cohortId provided
+          const cohort = await tx.cohort.findUnique({
+            where: { id: data.cohortId },
+          });
+          if (!cohort) {
+            throw new NotFoundError('Cohort');
+          }
+          cohortId = data.cohortId;
+          cohortStartYear = cohort.startYear;
+        } else {
+          throw new ValidationError('Cohort is required');
+        }
+
+        // Calculate grade from cohort if not provided
+        if (data.grade) {
+          // Both provided - validate they match
+          const expectedGrade = cohortsService.calculateGradeFromCohort(cohortStartYear);
+          if (data.grade !== expectedGrade) {
+            throw new ValidationError(
+              `המחזור והכיתה לא תואמים. ` +
+              `מחזור ${cohortStartYear} אמור להיות בכיתה ${expectedGrade || 'לא פעיל'}, ` +
+              `אבל הוזן ${data.grade}`
+            );
+          }
+          finalGrade = data.grade;
+        } else {
+          // Only cohort provided - calculate grade
+          finalGrade = cohortsService.calculateGradeFromCohort(cohortStartYear);
+          if (!finalGrade) {
+            throw new ValidationError(
+              `המחזור ${cohortStartYear} לא פעיל כרגע (אין לו כיתה נוכחית)`
+            );
+          }
+        }
+      } else if (data.grade) {
+        // Only grade provided - calculate cohort
+        const cohortStartYear = cohortsService.calculateCohortFromGrade(data.grade);
+        cohortId = await cohortsService.findOrCreateCohortByInput(cohortStartYear);
+        finalGrade = data.grade;
+      } else {
+        throw new ValidationError('נדרש לספק מחזור או כיתה (או שניהם)');
+      }
+
+      // Verify cohort exists (double check)
       const cohort = await tx.cohort.findUnique({
-        where: { id: data.cohortId },
+        where: { id: cohortId },
       });
 
       if (!cohort) {
@@ -199,10 +264,10 @@ export class StudentsService {
           lastName: data.lastName,
           gender: data.gender,
           // Keep deprecated fields for backward compatibility during migration
-          grade: data.grade,
+          grade: finalGrade,
           parallel: data.parallel,
           track: data.track,
-          cohortId: data.cohortId,
+          cohortId: cohortId,
           studyStartDate: data.studyStartDate instanceof Date ? data.studyStartDate : new Date(data.studyStartDate),
           status: 'ACTIVE',
           // Additional fields
@@ -232,7 +297,7 @@ export class StudentsService {
 
       // Create enrollment record atomically
       const classRecord = await this.findOrCreateClass(
-        data.grade,
+        finalGrade,
         data.parallel,
         data.track,
         academicYear,
@@ -250,7 +315,7 @@ export class StudentsService {
       logger.info({
         studentId: student.id,
         idNumber: data.idNumber,
-        cohortId: data.cohortId,
+        cohortId: cohortId,
       }, 'Student created with enrollment');
 
       // Return student with enrollment data

@@ -965,6 +965,7 @@ export class StudentsUploadService {
 
   /**
    * Find or create cohort by name/year
+   * Uses the CohortsService.ensureCohortExists for proper grade calculation
    */
   private async findOrCreateCohort(cohortName?: string, startYear?: number): Promise<number> {
     if (!cohortName && !startYear) {
@@ -973,51 +974,11 @@ export class StudentsUploadService {
 
     const year = startYear || new Date().getFullYear();
     
-    // Validate startYear range: 1973 (first cohort) to current year + 1
-    const currentYear = new Date().getFullYear();
-    const minYear = 1973;
-    const maxYear = currentYear + 1;
+    // Use CohortsService to ensure cohort exists with correct grade calculation
+    const { CohortsService } = await import('../cohorts/cohorts.service');
+    const cohortsService = new CohortsService();
     
-    if (year < minYear || year > maxYear) {
-      throw new ValidationError(
-        `שנת מחזור חייבת להיות בין ${minYear} ל-${maxYear}. התקבל: ${year}`
-      );
-    }
-    
-    // Import the function to generate cohort name
-    const { generateCohortName } = await import('../cohorts/cohorts.service');
-    const name = cohortName || generateCohortName(year);
-
-    // Try to find existing cohort
-    let cohort = null;
-    try {
-      cohort = await prisma.cohort.findFirst({
-        where: {
-          OR: [
-            { name: name },
-            { startYear: year },
-          ],
-        },
-      });
-    } catch (error: any) {
-      console.error('Error finding cohort:', error);
-      // If Prisma crashes, create a new cohort
-      cohort = null;
-    }
-
-    if (!cohort) {
-      // Create new cohort with default grade (ט')
-      cohort = await prisma.cohort.create({
-        data: {
-          name: name,
-          startYear: year,
-          currentGrade: 'ט\'',
-          isActive: true,
-        },
-      });
-    }
-
-    return cohort.id;
+    return await cohortsService.ensureCohortExists(year);
   }
 
   /**

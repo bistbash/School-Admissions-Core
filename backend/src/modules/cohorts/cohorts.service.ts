@@ -2,15 +2,17 @@ import { prisma } from '../../lib/database/prisma';
 import { NotFoundError, ValidationError } from '../../lib/utils/errors';
 
 export interface CreateCohortData {
-  name: string;
+  name?: string; // Optional - will be auto-generated from startYear with correct Hebrew Gematria
   startYear: number;
   currentGrade?: string | null; // ט', י', י"א, י"ב, י"ג, י"ד, or null for next cohort
 }
 
 export interface UpdateCohortData {
-  name?: string;
+  name?: string; // Will be validated against startYear's correct Gematria name
   currentGrade?: string;
   isActive?: boolean;
+  // Note: startYear should not be updated directly - create a new cohort instead
+  // If startYear needs to change, it's better to create a new cohort and migrate students
 }
 
 /**
@@ -112,15 +114,204 @@ export function generateCohortName(year: number): string {
   return `מחזור ${gematria}`;
 }
 
+/**
+ * Validate that a cohort name matches the correct Gematria for a given startYear
+ * Returns true if valid, throws ValidationError if invalid
+ */
+export function validateCohortName(name: string, startYear: number): boolean {
+  const correctName = generateCohortName(startYear);
+  if (name !== correctName) {
+    throw new ValidationError(
+      `שם המחזור "${name}" לא תואם לשנת ההתחלה ${startYear}. ` +
+      `השם הנכון הוא: "${correctName}"`
+    );
+  }
+  return true;
+}
+
+/**
+ * Convert Hebrew Gematria string back to number
+ * Examples: "א'" -> 1, "י"א" -> 11, "כ"ג" -> 23
+ */
+export function gematriaToNumber(gematria: string): number {
+  // Remove common prefixes/suffixes
+  let cleaned = gematria.trim();
+  
+  // Remove "מחזור " prefix if exists
+  if (cleaned.startsWith('מחזור ')) {
+    cleaned = cleaned.substring('מחזור '.length);
+  }
+  
+  // Remove trailing ' or " if exists
+  cleaned = cleaned.replace(/['"]$/, '');
+  
+  // Remove " between letters (e.g., י"א -> יא)
+  cleaned = cleaned.replace(/"/g, '');
+  
+  // Hebrew Gematria values (same as in numberToGematria)
+  const letterValues: Record<string, number> = {
+    'ת': 400,
+    'ש': 300,
+    'ר': 200,
+    'ק': 100,
+    'צ': 90,
+    'פ': 80,
+    'ע': 70,
+    'ס': 60,
+    'נ': 50,
+    'מ': 40,
+    'ל': 30,
+    'כ': 20,
+    'י': 10,
+    'ט': 9,
+    'ח': 8,
+    'ז': 7,
+    'ו': 6,
+    'ה': 5,
+    'ד': 4,
+    'ג': 3,
+    'ב': 2,
+    'א': 1,
+  };
+  
+  let total = 0;
+  let i = 0;
+  
+  while (i < cleaned.length) {
+    const char = cleaned[i];
+    const value = letterValues[char];
+    
+    if (!value) {
+      throw new ValidationError(`אות לא תקינה בגימטריה: "${char}"`);
+    }
+    
+    // For values >= 100, we can have multiple letters (e.g., תת for 800)
+    // For values < 100, we typically don't repeat
+    if (value >= 100) {
+      // Count consecutive same letters
+      let count = 0;
+      while (i < cleaned.length && cleaned[i] === char) {
+        count++;
+        i++;
+      }
+      total += value * count;
+    } else {
+      total += value;
+      i++;
+    }
+  }
+  
+  if (total <= 0) {
+    throw new ValidationError(`לא ניתן להמיר את הגימטריה "${gematria}" למספר`);
+  }
+  
+  return total;
+}
+
+/**
+ * Parse cohort input (year number or Gematria string) to startYear
+ * Examples:
+ * - 2024 -> 2024
+ * - "מחזור נ"ב" -> 2024 (if נ"ב is cohort 52, then 1973 + 52 - 1 = 2024)
+ * - "נ"ב" -> 2024
+ */
+export function parseCohortInput(input: string | number): number {
+  if (typeof input === 'number') {
+    return input;
+  }
+  
+  const cleaned = input.trim();
+  
+  // Try to parse as number first
+  const asNumber = parseInt(cleaned, 10);
+  if (!isNaN(asNumber) && asNumber.toString() === cleaned) {
+    return asNumber;
+  }
+  
+  // Try to parse as Gematria
+  try {
+    const cohortNumber = gematriaToNumber(cleaned);
+    const FIRST_COHORT_YEAR = 1973;
+    const startYear = FIRST_COHORT_YEAR + cohortNumber - 1;
+    return startYear;
+  } catch (error: any) {
+    throw new ValidationError(
+      `לא ניתן לזהות מחזור: "${input}". ` +
+      `אנא הזן שנה (למשל: 2024) או גימטריה (למשל: "מחזור נ"ב" או "נ"ב")`
+    );
+  }
+}
+
 export class CohortsService {
-  // Static cache for cohort initialization - shared across ALL instances
-  // This ensures cooldown works even when multiple CohortsService instances are created
-  // (e.g., one in controller, one at server startup)
-  private static lastEnsureTime: number = 0;
-  private static readonly ENSURE_COOLDOWN_MS = 60 * 60 * 1000; // 1 hour - only run ensure once per hour max (unless forced)
+
+  /**
+   * Find cohort by input (year number or Gematria string) and return cohort ID
+   * Creates cohort if it doesn't exist
+   */
+  async findOrCreateCohortByInput(input: string | number): Promise<number> {
+    const startYear = parseCohortInput(input);
+    return await this.ensureCohortExists(startYear);
+  }
+
+  /**
+   * Calculate grade from cohort startYear
+   * Returns the current grade that a cohort should have based on its startYear
+   */
+  calculateGradeFromCohort(startYear: number): string | null {
+    const { currentGrade } = this.calculateCohortGradeAndStatus(startYear);
+    return currentGrade;
+  }
+
+  /**
+   * Calculate cohort startYear from grade
+   * Given a grade, calculates what startYear a cohort should have to be in that grade now
+   * Returns the most likely startYear (current academic year cohort for that grade)
+   */
+  calculateCohortFromGrade(grade: string): number {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1; // 1-12
+    const currentDay = now.getDate();
+    
+    // Check if we're on or after September 1st
+    const isAfterSeptember1st = currentMonth > 9 || (currentMonth === 9 && currentDay >= 1);
+    const academicYearOffset = isAfterSeptember1st ? 0 : 1;
+    const academicStartYear = currentYear - academicYearOffset;
+    
+    // Grade to years offset mapping
+    const gradeOffsets: Record<string, number> = {
+      'ט\'': 0,
+      'י\'': 1,
+      'י"א': 2,
+      'י"ב': 3,
+      'י"ג': 4,
+      'י"ד': 5,
+    };
+    
+    const offset = gradeOffsets[grade];
+    if (offset === undefined) {
+      throw new ValidationError(`כיתה לא תקינה: "${grade}"`);
+    }
+    
+    // Calculate startYear: if grade is ט', cohort started this academic year
+    // If grade is י', cohort started last academic year, etc.
+    const startYear = academicStartYear - offset;
+    
+    // Validate range
+    const minYear = 1973;
+    const maxYear = currentYear + 1;
+    if (startYear < minYear || startYear > maxYear) {
+      throw new ValidationError(
+        `לא ניתן לחשב מחזור מכיתה "${grade}" - התוצאה ${startYear} מחוץ לטווח המותר (${minYear}-${maxYear})`
+      );
+    }
+    
+    return startYear;
+  }
 
   /**
    * Create a new cohort
+   * Ensures professional management with correct Hebrew Gematria names and years
    */
   async create(data: CreateCohortData) {
     // Validate startYear range: 1973 (first cohort) to current year + 1
@@ -134,13 +325,26 @@ export class CohortsService {
       );
     }
     
-    // Check if name already exists
-    const existing = await (prisma as any).cohort.findUnique({
-      where: { name: data.name },
+    // Generate correct Gematria name based on startYear
+    // Always use the correct name - ignore provided name to ensure consistency
+    const correctName = generateCohortName(data.startYear);
+    
+    // Check if cohort with this startYear already exists
+    const existingByYear = await (prisma as any).cohort.findFirst({
+      where: { startYear: data.startYear },
     });
 
-    if (existing) {
-      throw new ValidationError('Cohort with this name already exists');
+    if (existingByYear) {
+      throw new ValidationError(`מחזור עם שנת התחלה ${data.startYear} כבר קיים (${existingByYear.name})`);
+    }
+
+    // Check if name already exists (different year)
+    const existingByName = await (prisma as any).cohort.findUnique({
+      where: { name: correctName },
+    });
+
+    if (existingByName) {
+      throw new ValidationError(`מחזור עם השם ${correctName} כבר קיים (שנת התחלה: ${existingByName.startYear})`);
     }
 
     // If currentGrade is not provided, calculate it automatically
@@ -148,7 +352,7 @@ export class CohortsService {
     // If currentGrade is a string, use it with isActive: true
     let gradeAndStatus: { currentGrade: string | null; isActive: boolean };
     if (data.currentGrade === undefined) {
-      // Not provided - calculate automatically
+      // Not provided - calculate automatically based on startYear
       gradeAndStatus = this.calculateCohortGradeAndStatus(data.startYear);
     } else if (data.currentGrade === null) {
       // Explicitly null - future cohort, not active
@@ -160,7 +364,7 @@ export class CohortsService {
 
     return (prisma as any).cohort.create({
       data: {
-        name: data.name,
+        name: correctName, // Always use correct Gematria name
         startYear: data.startYear,
         currentGrade: gradeAndStatus.currentGrade,
         isActive: gradeAndStatus.isActive,
@@ -170,34 +374,14 @@ export class CohortsService {
 
   /**
    * Get all cohorts
-   * Also ensures all possible cohorts exist (from 1973 to current year + 1)
-   * Uses caching to avoid running ensureAllCohortsExist on every request
+   * Returns only existing cohorts - no automatic creation
+   * Use ensureCohortExists() or ensureAllCohortsExist() if you need to create/update cohorts
    */
-  async getAll(filters?: { isActive?: boolean; skipAutoCreate?: boolean; forceRefresh?: boolean }) {
+  async getAll(filters?: { isActive?: boolean }) {
     const where: any = {};
     
     if (filters?.isActive !== undefined) {
       where.isActive = filters.isActive;
-    }
-
-    // Ensure all possible cohorts exist (unless skipAutoCreate is true)
-    // Use static cache to avoid running this on every API call (once per hour max)
-    // Static cache ensures cooldown works across all CohortsService instances
-    if (!filters?.skipAutoCreate) {
-      const now = Date.now();
-      const shouldRunEnsure = 
-        filters?.forceRefresh || 
-        now - CohortsService.lastEnsureTime > CohortsService.ENSURE_COOLDOWN_MS;
-      
-      if (shouldRunEnsure) {
-        try {
-          await this.ensureAllCohortsExist();
-          CohortsService.lastEnsureTime = now;
-        } catch (error: any) {
-          console.error('Error in ensureAllCohortsExist:', error);
-          // Continue even if ensureAllCohortsExist fails - return existing cohorts
-        }
-      }
     }
 
     try {
@@ -229,6 +413,78 @@ export class CohortsService {
         },
       });
     }
+  }
+
+  /**
+   * Ensure a specific cohort exists (lazy creation)
+   * Creates the cohort if it doesn't exist, or updates it if it exists but needs updating
+   * This is more efficient than ensureAllCohortsExist when you only need one cohort
+   * 
+   * @param startYear - The start year of the cohort (1973 to current year + 1)
+   * @returns The cohort ID
+   */
+  async ensureCohortExists(startYear: number): Promise<number> {
+    // Validate startYear range
+    const currentYear = new Date().getFullYear();
+    const minYear = 1973;
+    const maxYear = currentYear + 1;
+    
+    if (startYear < minYear || startYear > maxYear) {
+      throw new ValidationError(
+        `שנת מחזור חייבת להיות בין ${minYear} ל-${maxYear}. התקבל: ${startYear}`
+      );
+    }
+
+    const cohortName = generateCohortName(startYear);
+    const { currentGrade, isActive } = this.calculateCohortGradeAndStatus(startYear);
+
+    // Try to find existing cohort
+    let cohort = await (prisma as any).cohort.findFirst({
+      where: {
+        OR: [
+          { name: cohortName },
+          { startYear: startYear },
+        ],
+      },
+    });
+
+    if (!cohort) {
+      // Create new cohort
+      cohort = await (prisma as any).cohort.create({
+        data: {
+          name: cohortName,
+          startYear: startYear,
+          currentGrade,
+          isActive,
+        },
+      });
+    } else {
+      // Update existing cohort if needed
+      // Always ensure name is correct (professional management with Hebrew Gematria)
+      const nameNeedsUpdate = cohort.name !== cohortName;
+      const gradeNeedsUpdate = cohort.currentGrade !== currentGrade;
+      const statusNeedsUpdate = cohort.isActive !== isActive;
+      
+      const needsUpdate = nameNeedsUpdate || gradeNeedsUpdate || statusNeedsUpdate;
+
+      if (needsUpdate) {
+        const updateData: any = {
+          isActive,
+          currentGrade,
+        };
+        // Always update name to ensure correct Hebrew Gematria (professional management)
+        if (nameNeedsUpdate) {
+          updateData.name = cohortName;
+        }
+        
+        cohort = await (prisma as any).cohort.update({
+          where: { id: cohort.id },
+          data: updateData,
+        });
+      }
+    }
+
+    return cohort.id;
   }
 
   /**
@@ -368,18 +624,20 @@ export class CohortsService {
           });
         } else {
           // Cohort exists - check if update is needed
-          const needsUpdate = 
-            existing.currentGrade !== currentGrade || 
-            existing.isActive !== isActive ||
-            existing.name !== cohortName; // Also update name if it changed (e.g., after code fixes)
+          // Always ensure name is correct (professional management with Hebrew Gematria)
+          const nameNeedsUpdate = existing.name !== cohortName;
+          const gradeNeedsUpdate = existing.currentGrade !== currentGrade;
+          const statusNeedsUpdate = existing.isActive !== isActive;
+          
+          const needsUpdate = nameNeedsUpdate || gradeNeedsUpdate || statusNeedsUpdate;
 
           if (needsUpdate) {
             const updateData: any = {
               isActive,
               currentGrade,
             };
-            // Update name if it changed (shouldn't happen often, but ensures consistency)
-            if (existing.name !== cohortName) {
+            // Always update name to ensure correct Hebrew Gematria (professional management)
+            if (nameNeedsUpdate) {
               updateData.name = cohortName;
             }
             
@@ -478,6 +736,7 @@ export class CohortsService {
 
   /**
    * Update cohort
+   * Ensures professional management - automatically updates name if startYear changes
    */
   async update(id: number, data: UpdateCohortData) {
     const cohort = await (prisma as any).cohort.findUnique({
@@ -488,9 +747,37 @@ export class CohortsService {
       throw new NotFoundError('Cohort');
     }
 
+    // Prepare update data
+    const updateData: any = { ...data };
+
+    // If startYear is being updated, recalculate the correct Gematria name
+    // Note: startYear is not in UpdateCohortData, but we handle it defensively
+    // If someone tries to update startYear through direct Prisma, the name should be updated too
+    // For now, we ensure name consistency by validating it matches the startYear
+    
+    // Validate that if name is provided, it matches the correct Gematria for startYear
+    // This ensures professional management with correct Hebrew Gematria names
+    if (data.name && cohort.startYear) {
+      try {
+        validateCohortName(data.name, cohort.startYear);
+      } catch (error: any) {
+        // If validation fails, automatically correct the name
+        // This ensures consistency - we always use the correct Gematria name
+        const correctName = generateCohortName(cohort.startYear);
+        console.warn(
+          `Cohort ${id}: Correcting name from "${data.name}" to "${correctName}" for startYear ${cohort.startYear}`
+        );
+        updateData.name = correctName;
+      }
+    }
+
+    // If currentGrade is being updated, we might need to update isActive too
+    // But we'll let the caller control isActive explicitly if needed
+    // The calculateCohortGradeAndStatus logic is used for automatic calculation, not manual updates
+
     return (prisma as any).cohort.update({
       where: { id },
-      data,
+      data: updateData,
       include: {
         students: {
           where: {
