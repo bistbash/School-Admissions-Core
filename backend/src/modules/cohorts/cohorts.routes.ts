@@ -15,12 +15,12 @@ const createCohortSchema = z.object({
   startYear: z.number().int()
     .min(1973, 'שנת מחזור חייבת להיות 1973 או מאוחר יותר')
     .max(new Date().getFullYear() + 1, `שנת מחזור חייבת להיות ${new Date().getFullYear() + 1} או מוקדם יותר`),
-  currentGrade: z.enum(['ט\'', 'י\'', 'י"א', 'י"ב', 'י"ג', 'י"ד']).nullable().optional(),
+  currentGrade: z.enum(['ט\'', 'י\'', 'י"א', 'י"ב']).nullable().optional(),
 });
 
 const updateCohortSchema = z.object({
   name: z.string().min(1).optional(),
-  currentGrade: z.enum(['ט\'', 'י\'', 'י"א', 'י"ב', 'י"ג', 'י"ד']).optional(),
+  currentGrade: z.enum(['ט\'', 'י\'', 'י"א', 'י"ב']).optional(),
   isActive: z.boolean().optional(),
 });
 

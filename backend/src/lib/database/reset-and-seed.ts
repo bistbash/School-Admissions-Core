@@ -13,6 +13,8 @@
  */
 
 import { execSync } from 'child_process';
+import { unlinkSync, existsSync } from 'fs';
+import { join } from 'path';
 import { seedDatabase } from './seed';
 import { logger } from '../utils/logger';
 
@@ -20,19 +22,50 @@ async function resetAndSeed() {
   logger.info('Starting database reset and seed...');
 
   try {
-    // Step 1: Reset database (this will delete all data)
+    // Step 1: Delete database files (this will delete all data)
     logger.info('Step 1: Resetting database (this will delete all data)...');
     console.log('\n⚠️  WARNING: This will DELETE ALL DATA in the database!\n');
 
-    execSync('npx prisma migrate reset --force --skip-seed', {
+    const dbPath = join(process.cwd(), 'prisma', 'dev.db');
+    const dbShmPath = join(process.cwd(), 'prisma', 'dev.db-shm');
+    const dbWalPath = join(process.cwd(), 'prisma', 'dev.db-wal');
+
+    // Delete database files if they exist
+    if (existsSync(dbPath)) {
+      unlinkSync(dbPath);
+      logger.info('Deleted dev.db');
+    }
+    if (existsSync(dbShmPath)) {
+      unlinkSync(dbShmPath);
+      logger.info('Deleted dev.db-shm');
+    }
+    if (existsSync(dbWalPath)) {
+      unlinkSync(dbWalPath);
+      logger.info('Deleted dev.db-wal');
+    }
+
+    logger.info('Database files deleted');
+
+    // Step 2: Apply migrations to create fresh database
+    logger.info('Step 2: Applying migrations...');
+    execSync('npx prisma migrate deploy', {
       stdio: 'inherit',
       cwd: process.cwd(),
     });
 
-    logger.info('Database reset completed');
+    logger.info('Migrations applied');
 
-    // Step 2: Run seed script
-    logger.info('Step 2: Running seed script...');
+    // Step 3: Generate Prisma Client
+    logger.info('Step 3: Generating Prisma Client...');
+    execSync('npx prisma generate', {
+      stdio: 'inherit',
+      cwd: process.cwd(),
+    });
+
+    logger.info('Prisma Client generated');
+
+    // Step 4: Run seed script
+    logger.info('Step 4: Running seed script...');
     const seedResult = await seedDatabase();
 
     if ('success' in seedResult && seedResult.success) {

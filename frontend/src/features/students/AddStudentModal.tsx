@@ -613,8 +613,6 @@ export function AddStudentModal({ isOpen, onClose, onSuccess, cohorts }: AddStud
                   { value: 'י\'', label: 'י\'' },
                   { value: 'י"א', label: 'י"א' },
                   { value: 'י"ב', label: 'י"ב' },
-                  { value: 'י"ג', label: 'י"ג' },
-                  { value: 'י"ד', label: 'י"ד' },
                 ]}
               />
               <Select

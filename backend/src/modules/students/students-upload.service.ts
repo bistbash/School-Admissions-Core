@@ -64,7 +64,7 @@ export interface RowConflict {
 
 export class StudentsUploadService {
   private studentsService: StudentsService;
-  private validGrades = ['ט\'', 'י\'', 'י"א', 'י"ב', 'י"ג', 'י"ד'];
+  private validGrades = ['ט\'', 'י\'', 'י"א', 'י"ב'];
   private validParallels = ['1', '2', '3', '4', '5', '6', '7', '8'];
   private existingTracksCache: Set<string> | null = null;
   private existingTracksMap: Map<string, string> | null = null; // lowercase -> original

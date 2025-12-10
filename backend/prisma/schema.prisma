@@ -141,7 +141,7 @@ model Cohort {
   id           Int       @id @default(autoincrement())
   name         String    @unique // Cohort name (e.g., "Cohort 2024")
   startYear    Int // Start year
-  currentGrade String? // Current grade (9th, 10th, 11th, 12th, 13th, 14th) - null for next cohort (in selection)
+  currentGrade String? // Current grade (9th, 10th, 11th, 12th) - null for next cohort (in selection)
   isActive     Boolean   @default(true)
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt

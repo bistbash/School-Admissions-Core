@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { CohortsService, CreateCohortData, UpdateCohortData } from './cohorts.service';
+import { CohortsService, CreateCohortData, UpdateCohortData, generateCohortName } from './cohorts.service';
 import { z } from 'zod';
 import { auditFromRequest } from '../../lib/audit/audit';
 
@@ -10,12 +10,12 @@ const createCohortSchema = z.object({
   startYear: z.number().int()
     .min(1973, 'שנת מחזור חייבת להיות 1973 או מאוחר יותר')
     .max(new Date().getFullYear() + 1, `שנת מחזור חייבת להיות ${new Date().getFullYear() + 1} או מוקדם יותר`),
-  currentGrade: z.enum(['ט\'', 'י\'', 'י"א', 'י"ב', 'י"ג', 'י"ד']).nullable().optional(),
+  currentGrade: z.enum(['ט\'', 'י\'', 'י"א', 'י"ב']).nullable().optional(),
 });
 
 const updateCohortSchema = z.object({
   name: z.string().min(1).optional(),
-  currentGrade: z.enum(['ט\'', 'י\'', 'י"א', 'י"ב', 'י"ג', 'י"ד']).optional(),
+  currentGrade: z.enum(['ט\'', 'י\'', 'י"א', 'י"ב']).optional(),
   isActive: z.boolean().optional(),
 });
 
@@ -105,7 +105,7 @@ export class CohortsController {
       
       if (!grade) {
         return res.status(400).json({ 
-          error: `המחזור ${startYear} לא פעיל כרגע (אין לו כיתה נוכחית)` 
+          error: `${generateCohortName(startYear)} לא פעיל כרגע (אין לו כיתה נוכחית)` 
         });
       }
 
@@ -245,7 +245,7 @@ export class CohortsController {
         });
       }
 
-      const { CohortsService, parseCohortInput } = await import('./cohorts.service');
+      const { CohortsService, parseCohortInput, generateCohortName } = await import('./cohorts.service');
       const cohortsService = new CohortsService();
       
       const startYear = parseCohortInput(cohort);
@@ -266,14 +266,16 @@ export class CohortsController {
         
         // Check if the date is within the cohort's active period
         const cohortStartDate = new Date(startYear, 8, 1); // September 1st of start year
-        const cohortEndDate = new Date(startYear + 5, 8, 1); // September 1st of start year + 5
+        const cohortEndDate = new Date(startYear + 3, 8, 1); // September 1st of start year + 3 (י"ב)
         
         if (targetDate < cohortStartDate) {
           const startDateStr = `${cohortStartDate.getDate().toString().padStart(2, '0')}.${(cohortStartDate.getMonth() + 1).toString().padStart(2, '0')}.${cohortStartDate.getFullYear()}`;
-          cohortStatusMessage = `המחזור ${startYear} עדיין לא התחיל. המחזור יתחיל ב-${startDateStr}`;
+          const cohortName = generateCohortName(startYear);
+          cohortStatusMessage = `${cohortName} טרם התחיל. המחזור יתחיל ב-${startDateStr}`;
         } else if (targetDate >= cohortEndDate) {
           const endDateStr = `${cohortEndDate.getDate().toString().padStart(2, '0')}.${(cohortEndDate.getMonth() + 1).toString().padStart(2, '0')}.${cohortEndDate.getFullYear()}`;
-          cohortStatusMessage = `המחזור ${startYear} כבר הסתיים. המחזור הסתיים ב-${endDateStr}`;
+          const cohortName = generateCohortName(startYear);
+          cohortStatusMessage = `${cohortName} הסתיים. המחזור הסתיים ב-${endDateStr}`;
         } else {
           expectedGrade = cohortsService.calculateGradeAtDate(startYear, targetDate);
         }
@@ -293,9 +295,10 @@ export class CohortsController {
         } else {
           // If cohort is active but grade doesn't match
           const dateContext = studyStartDate ? ` בתאריך ${studyStartDate}` : ' כרגע';
+          const cohortName = generateCohortName(startYear);
           return res.status(400).json({
             matches: false,
-            error: `המחזור והכיתה לא תואמים. מחזור ${startYear}${dateContext} אמור להיות בכיתה ${expectedGrade || 'לא פעיל'}, אבל הוזן ${grade}`
+            error: `המחזור והכיתה לא תואמים. ${cohortName}${dateContext} אמור להיות בכיתה ${expectedGrade || 'לא פעיל'}, אבל הוזן ${grade}`
           });
         }
       }
@@ -339,23 +342,25 @@ export class CohortsController {
       }
 
       // First, check if the date is within the cohort's active period
-      // Cohorts are active from ט' (start year) to י"ד (start year + 5)
+      // Cohorts are active from ט' (start year) to י"ב (start year + 3)
       const cohortStartDate = new Date(cohortStartYear, 8, 1); // September 1st of start year (ט')
-      const cohortEndDate = new Date(cohortStartYear + 5, 8, 1); // September 1st of start year + 5 (י"ד)
+      const cohortEndDate = new Date(cohortStartYear + 3, 8, 1); // September 1st of start year + 3 (י"ב)
       
       if (startDate < cohortStartDate) {
         const startDateStr = `${cohortStartDate.getDate().toString().padStart(2, '0')}.${(cohortStartDate.getMonth() + 1).toString().padStart(2, '0')}.${cohortStartDate.getFullYear()}`;
+        const cohortName = generateCohortName(cohortStartYear);
         return res.json({
           valid: false,
-          error: `המחזור ${cohortStartYear} עדיין לא התחיל בתאריך זה. המחזור יתחיל ב-${startDateStr}`,
+          error: `תאריך התחלת הלימודים שנבחר קודם לתחילת המחזור. ${cohortName} יתחיל ב-${startDateStr}`,
           minDate: cohortStartDate.toISOString().split('T')[0],
           maxDate: cohortEndDate.toISOString().split('T')[0],
         });
       } else if (startDate >= cohortEndDate) {
         const endDateStr = `${cohortEndDate.getDate().toString().padStart(2, '0')}.${(cohortEndDate.getMonth() + 1).toString().padStart(2, '0')}.${cohortEndDate.getFullYear()}`;
+        const cohortName = generateCohortName(cohortStartYear);
         return res.json({
           valid: false,
-          error: `המחזור ${cohortStartYear} כבר הסתיים בתאריך זה. המחזור הסתיים ב-${endDateStr}`,
+          error: `תאריך התחלת הלימודים שנבחר לאחר סיום המחזור. ${cohortName} הסתיים ב-${endDateStr}`,
           minDate: cohortStartDate.toISOString().split('T')[0],
           maxDate: cohortEndDate.toISOString().split('T')[0],
         });
@@ -367,8 +372,6 @@ export class CohortsController {
         'י\'': 10,
         'י"א': 11,
         'י"ב': 12,
-        'י"ג': 13,
-        'י"ד': 14,
       };
 
       const gradeNumber = gradeToNumber[grade];
@@ -399,7 +402,7 @@ export class CohortsController {
         
         return res.json({
           valid: false,
-          error: `תאריך התחלת לימודים חייב להיות בין ${minDateStr} ל-${maxDateStr} לפי המחזור ${cohortStartYear} והכיתה ${grade}`,
+          error: `תאריך התחלת לימודים חייב להיות בין ${minDateStr} ל-${maxDateStr} לפי ${generateCohortName(cohortStartYear)} והכיתה ${grade}`,
           minDate: minDate.toISOString().split('T')[0],
           maxDate: maxDate.toISOString().split('T')[0],
         });

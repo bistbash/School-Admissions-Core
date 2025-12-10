@@ -4,7 +4,7 @@ import { NotFoundError, ValidationError } from '../../lib/utils/errors';
 export interface CreateCohortData {
   name?: string; // Optional - will be auto-generated from startYear with correct Hebrew Gematria
   startYear: number;
-  currentGrade?: string | null; // ט', י', י"א, י"ב, י"ג, י"ד, or null for next cohort
+  currentGrade?: string | null; // ט', י', י"א, י"ב, or null for next cohort
 }
 
 export interface UpdateCohortData {
@@ -300,21 +300,13 @@ export class CohortsService {
     if (yearsDiff === 2) {
       return 'י"א';
     }
-    // Target academic year - 3 = י"ב (4th year)
+    // Target academic year - 3 = י"ב (4th year, final grade)
     if (yearsDiff === 3) {
       return 'י"ב';
     }
-    // Target academic year - 4 = י"ג (5th year)
-    if (yearsDiff === 4) {
-      return 'י"ג';
-    }
-    // Target academic year - 5 = י"ד (6th year)
-    if (yearsDiff === 5) {
-      return 'י"ד';
-    }
-    // Target academic year - 6 and older = י"ד (graduated)
-    if (yearsDiff >= 6) {
-      return 'י"ד';
+    // Target academic year - 4 and older = י"ב (graduated)
+    if (yearsDiff >= 4) {
+      return 'י"ב';
     }
     
     // Before cohort started (yearsDiff < -1)
@@ -343,8 +335,6 @@ export class CohortsService {
       'י\'': 1,
       'י"א': 2,
       'י"ב': 3,
-      'י"ג': 4,
-      'י"ד': 5,
     };
     
     const offset = gradeOffsets[grade];
@@ -550,38 +540,32 @@ export class CohortsService {
    * Calculate current grade and active status for a cohort based on its start year
    * Cohorts always start on September 1st (01.09.year)
    * 
-   * Active cohorts: Last 6 cohorts (not including current year + 1)
-   * י"ד is the last grade before graduation, so it must remain active until the next 01.09
+   * Active cohorts: Last 4 cohorts (not including current year + 1)
+   * י"ב is the last grade before graduation, so it must remain active until the next 01.09
    * - Current year = ט' (active)
    * - Current year - 1 = י' (active)
    * - Current year - 2 = י"א (active)
-   * - Current year - 3 = י"ב (active)
-   * - Current year - 4 = י"ג (active)
-   * - Current year - 5 = י"ד (active - last active grade before graduation)
+   * - Current year - 3 = י"ב (active - last active grade before graduation)
    * 
    * Next cohort (not active): Current year + 1 = NO GRADE (null) - will start next year, currently in selection
    * 
-   * Inactive cohorts: Current year - 6 and older = י"ד (graduated, isActive = false)
+   * Inactive cohorts: Current year - 4 and older = י"ב (graduated, isActive = false)
    * 
    * Logic (if current date >= September 1st):
    * - Current year + 1 = null (next cohort, no grade yet, not active)
    * - Current year = ט' (active)
    * - Current year - 1 = י' (active)
    * - Current year - 2 = י"א (active)
-   * - Current year - 3 = י"ב (active)
-   * - Current year - 4 = י"ג (active)
-   * - Current year - 5 = י"ד (active - last active grade)
-   * - Current year - 6 = י"ד (inactive - graduated)
+   * - Current year - 3 = י"ב (active - last active grade)
+   * - Current year - 4 = י"ב (inactive - graduated)
    * 
    * Logic (if current date < September 1st):
    * - Current year = null (next cohort, no grade yet, not active)
    * - Current year - 1 = ט' (active)
    * - Current year - 2 = י' (active)
    * - Current year - 3 = י"א (active)
-   * - Current year - 4 = י"ב (active)
-   * - Current year - 5 = י"ג (active)
-   * - Current year - 6 = י"ד (active - last active grade)
-   * - Current year - 7 = י"ד (inactive - graduated)
+   * - Current year - 4 = י"ב (active - last active grade)
+   * - Current year - 5 = י"ב (inactive - graduated)
    */
   calculateCohortGradeAndStatus(startYear: number): { currentGrade: string | null; isActive: boolean } {
     const now = new Date();
@@ -605,32 +589,24 @@ export class CohortsService {
     if (yearsDiff === -1) {
       return { currentGrade: null, isActive: false };
     }
-    // Current academic year = ט' (active - 1st of 6 active cohorts)
+    // Current academic year = ט' (active - 1st of 4 active cohorts)
     if (yearsDiff === 0) {
       return { currentGrade: 'ט\'', isActive: true };
     }
-    // Current academic year - 1 = י' (active - 2nd of 6 active cohorts)
+    // Current academic year - 1 = י' (active - 2nd of 4 active cohorts)
     if (yearsDiff === 1) {
       return { currentGrade: 'י\'', isActive: true };
     }
-    // Current academic year - 2 = י"א (active - 3rd of 6 active cohorts)
+    // Current academic year - 2 = י"א (active - 3rd of 4 active cohorts)
     if (yearsDiff === 2) {
       return { currentGrade: 'י"א', isActive: true };
     }
-    // Current academic year - 3 = י"ב (active - 4th of 6 active cohorts)
+    // Current academic year - 3 = י"ב (active - 4th of 4 active cohorts, last active grade before graduation)
     if (yearsDiff === 3) {
       return { currentGrade: 'י"ב', isActive: true };
     }
-    // Current academic year - 4 = י"ג (active - 5th of 6 active cohorts)
-    if (yearsDiff === 4) {
-      return { currentGrade: 'י"ג', isActive: true };
-    }
-    // Current academic year - 5 = י"ד (active - 6th of 6 active cohorts, last active grade before graduation)
-    if (yearsDiff === 5) {
-      return { currentGrade: 'י"ד', isActive: true };
-    }
-    // Current academic year - 6 and older = י"ד (graduated, not active)
-    return { currentGrade: 'י"ד', isActive: false };
+    // Current academic year - 4 and older = י"ב (graduated, not active)
+    return { currentGrade: 'י"ב', isActive: false };
   }
 
   /**

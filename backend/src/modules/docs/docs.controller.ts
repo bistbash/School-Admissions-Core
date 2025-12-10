@@ -284,7 +284,7 @@ export class DocsController {
                 firstName: 'string (required)',
                 lastName: 'string (required)',
                 gender: 'MALE | FEMALE (required)',
-                grade: 'ט\' | י\' | י"א | י"ב | י"ג | י"ד (required)',
+                grade: 'ט\' | י\' | י"א | י"ב (required)',
                 parallel: '1-8 (optional)',
                 track: 'string (optional)',
                 cohortId: 'number (required)',
@@ -385,7 +385,7 @@ export class DocsController {
               fields: {
                 name: 'string (required)',
                 startYear: `number (required, min: 1954, max: ${new Date().getFullYear() + 1}) - שנת מחזור`,
-                currentGrade: 'string (required) - ט\', י\', י"א, י"ב, י"ג, או י"ד',
+                currentGrade: 'string (required) - ט\', י\', י"א, או י"ב',
               },
             },
           },

@@ -130,10 +130,10 @@ export function CohortsManagement() {
                 <div className="space-y-2 max-h-96 overflow-y-auto">
                   {inactiveCohorts.map((cohort) => {
                     const studentCount = cohort._count?.students || 0;
-                    // Calculate end date: cohort starts at startYear, ends 5 years later (after י"ד)
-                    // The cohort goes through: ט' (year 1), י' (year 2), י"א (year 3), י"ב (year 4), י"ג (year 5), י"ד (year 6)
-                    // So it ends on 01.09.(startYear + 5)
-                    const endYear = cohort.startYear + 5;
+                    // Calculate end date: cohort starts at startYear, ends 3 years later (after י"ב)
+                    // The cohort goes through: ט' (year 1), י' (year 2), י"א (year 3), י"ב (year 4)
+                    // So it ends on 01.09.(startYear + 3)
+                    const endYear = cohort.startYear + 3;
                     return (
                       <div
                         key={cohort.id}

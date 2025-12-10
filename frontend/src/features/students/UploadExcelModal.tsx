@@ -228,7 +228,7 @@ export function UploadExcelModal({ isOpen, onClose, onSuccess }: UploadExcelModa
                     <li><code className="bg-blue-100 dark:bg-blue-900/50 px-1 rounded">שם פרטי</code></li>
                     <li><code className="bg-blue-100 dark:bg-blue-900/50 px-1 rounded">שם משפחה</code></li>
                     <li><code className="bg-blue-100 dark:bg-blue-900/50 px-1 rounded">מין</code> (זכר/נקבה)</li>
-                    <li><code className="bg-blue-100 dark:bg-blue-900/50 px-1 rounded">כיתה</code> (ט', י', י"א, י"ב, י"ג, י"ד)</li>
+                    <li><code className="bg-blue-100 dark:bg-blue-900/50 px-1 rounded">כיתה</code> (ט', י', י"א, י"ב)</li>
                   </ul>
                 </div>
                 <div className="space-y-1">

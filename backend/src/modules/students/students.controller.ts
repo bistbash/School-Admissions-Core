@@ -12,8 +12,8 @@ const createStudentSchema = z.object({
   gender: z.enum(['MALE', 'FEMALE'], {
     errorMap: () => ({ message: 'Gender must be MALE or FEMALE' }),
   }),
-  grade: z.enum(['ט\'', 'י\'', 'י"א', 'י"ב', 'י"ג', 'י"ד'], {
-    errorMap: () => ({ message: 'Grade must be ט\', י\', י"א, י"ב, י"ג, or י"ד' }),
+  grade: z.enum(['ט\'', 'י\'', 'י"א', 'י"ב'], {
+    errorMap: () => ({ message: 'Grade must be ט\', י\', י"א, or י"ב' }),
   }).optional(), // Optional - will be calculated from cohort if not provided
   parallel: z.enum(['1', '2', '3', '4', '5', '6', '7', '8']).optional(),
   track: z.string().optional(),
@@ -36,7 +36,7 @@ const updateStudentSchema = z.object({
   firstName: z.string().min(1).optional(),
   lastName: z.string().min(1).optional(),
   gender: z.enum(['MALE', 'FEMALE']).optional(),
-  grade: z.enum(['ט\'', 'י\'', 'י"א', 'י"ב', 'י"ג', 'י"ד']).optional(),
+  grade: z.enum(['ט\'', 'י\'', 'י"א', 'י"ב']).optional(),
   parallel: z.enum(['1', '2', '3', '4', '5', '6', '7', '8']).optional(),
   track: z.string().optional(),
   cohortId: z.number().int().positive().optional(),

@@ -2,13 +2,14 @@ import { prisma } from '../../lib/database/prisma';
 import { NotFoundError, ValidationError } from '../../lib/utils/errors';
 import { logger } from '../../lib/utils/logger';
 import { PrismaClient } from '@prisma/client';
+import { generateCohortName } from '../cohorts/cohorts.service';
 
 export interface CreateStudentData {
   idNumber: string;
   firstName: string;
   lastName: string;
   gender: 'MALE' | 'FEMALE';
-  grade?: string; // י', י"א, י"ב, י"ג, י"ד - optional, will be calculated from cohort if not provided
+  grade?: string; // ט', י', י"א, י"ב - optional, will be calculated from cohort if not provided
   parallel?: string;
   track?: string;
   cohortId?: number; // Optional - cohort ID (legacy)
@@ -226,9 +227,10 @@ export class StudentsService {
           const expectedGrade = cohortsService.calculateGradeAtDate(cohortStartYear, studyStartDate);
           if (data.grade !== expectedGrade) {
             const dateStr = studyStartDate.toISOString().split('T')[0];
+            const cohortName = generateCohortName(cohortStartYear);
             throw new ValidationError(
               `המחזור והכיתה לא תואמים. ` +
-              `מחזור ${cohortStartYear} בתאריך ${dateStr} אמור להיות בכיתה ${expectedGrade || 'לא פעיל'}, ` +
+              `${cohortName} בתאריך ${dateStr} אמור להיות בכיתה ${expectedGrade || 'לא פעיל'}, ` +
               `אבל הוזן ${data.grade}`
             );
           }
@@ -241,8 +243,9 @@ export class StudentsService {
           finalGrade = cohortsService.calculateGradeAtDate(cohortStartYear, studyStartDate);
           if (!finalGrade) {
             const dateStr = studyStartDate.toISOString().split('T')[0];
+            const cohortName = generateCohortName(cohortStartYear);
             throw new ValidationError(
-              `המחזור ${cohortStartYear} לא היה פעיל בתאריך ${dateStr} (המחזור עדיין לא התחיל)`
+              `${cohortName} לא היה פעיל בתאריך ${dateStr} (המחזור טרם התחיל או כבר הסתיים)`
             );
           }
         }
@@ -275,19 +278,21 @@ export class StudentsService {
         }
 
         // First, check if the date is within the cohort's active period
-        // Cohorts are active from ט' (start year) to י"ד (start year + 5)
+        // Cohorts are active from ט' (start year) to י"ב (start year + 3)
         const cohortStartDate = new Date(cohort.startYear, 8, 1); // September 1st of start year (ט')
-        const cohortEndDate = new Date(cohort.startYear + 5, 8, 1); // September 1st of start year + 5 (י"ד)
+        const cohortEndDate = new Date(cohort.startYear + 3, 8, 1); // September 1st of start year + 3 (י"ב)
         
         if (studyStartDate < cohortStartDate) {
           const startDateStr = `${cohortStartDate.getDate().toString().padStart(2, '0')}.${(cohortStartDate.getMonth() + 1).toString().padStart(2, '0')}.${cohortStartDate.getFullYear()}`;
+          const cohortName = generateCohortName(cohort.startYear);
           throw new ValidationError(
-            `המחזור ${cohort.startYear} עדיין לא התחיל בתאריך זה. המחזור יתחיל ב-${startDateStr}`
+            `תאריך התחלת הלימודים שנבחר קודם לתחילת המחזור. ${cohortName} יתחיל ב-${startDateStr}`
           );
         } else if (studyStartDate >= cohortEndDate) {
           const endDateStr = `${cohortEndDate.getDate().toString().padStart(2, '0')}.${(cohortEndDate.getMonth() + 1).toString().padStart(2, '0')}.${cohortEndDate.getFullYear()}`;
+          const cohortName = generateCohortName(cohort.startYear);
           throw new ValidationError(
-            `המחזור ${cohort.startYear} כבר הסתיים בתאריך זה. המחזור הסתיים ב-${endDateStr}`
+            `תאריך התחלת הלימודים שנבחר לאחר סיום המחזור. ${cohortName} הסתיים ב-${endDateStr}`
           );
         }
 
@@ -297,8 +302,6 @@ export class StudentsService {
           'י\'': 10,
           'י"א': 11,
           'י"ב': 12,
-          'י"ג': 13,
-          'י"ד': 14,
         };
 
         const gradeNumber = gradeToNumber[finalGrade];
@@ -321,7 +324,7 @@ export class StudentsService {
             const maxDateStr = `${maxDate.getDate().toString().padStart(2, '0')}.${(maxDate.getMonth() + 1).toString().padStart(2, '0')}.${maxDate.getFullYear()}`;
             
             throw new ValidationError(
-              `תאריך התחלת לימודים חייב להיות בין ${minDateStr} ל-${maxDateStr} לפי המחזור ${cohort.startYear} והכיתה ${finalGrade}`
+              `תאריך התחלת לימודים חייב להיות בין ${minDateStr} ל-${maxDateStr} לפי ${generateCohortName(cohort.startYear)} והכיתה ${finalGrade}`
             );
           }
         }
@@ -749,13 +752,12 @@ export class StudentsService {
       throw new NotFoundError('Cohort');
     }
 
-    // Grade progression: ט' -> י' -> י"א -> י"ב (י"ב מסיים, י"ג-י"ד נכנסים ידנית)
+    // Grade progression: ט' -> י' -> י"א -> י"ב (י"ב מסיים)
     const gradeProgression: Record<string, string | null> = {
       'ט\'': 'י\'',
       'י\'': 'י"א',
       'י"א': 'י"ב',
-      'י"ב': null, // י"ב is the final grade - students graduate (unless manually added to י"ג-י"ד)
-      // י"ג and י"ד are not in automatic progression - students must be manually added
+      'י"ב': null, // י"ב is the final grade - students graduate
     };
 
     const nextGrade = gradeProgression[cohort.currentGrade];
@@ -884,7 +886,6 @@ export class StudentsService {
       'י\'': 'י"א',
       'י"א': 'י"ב',
       'י"ב': null, // י"ב is the final grade - students graduate
-      // י"ג and י"ד are not in automatic progression - they stay as is
     };
 
     const academicYear = newAcademicYear || this.getCurrentAcademicYear();
@@ -935,7 +936,7 @@ export class StudentsService {
           const nextGrade = gradeProgression[currentGrade];
           
           if (nextGrade === undefined) {
-            // Grade not in progression (e.g., י"ג, י"ד) - skip
+            // Grade not in progression - skip
             logger.debug({ studentId: student.id, grade: currentGrade }, 'Skipping student - grade not in automatic progression');
             results.skipped++;
             continue;
@@ -1038,7 +1039,7 @@ export class StudentsService {
               }
             });
 
-            const grades = ['ט\'', 'י\'', 'י"א', 'י"ב', 'י"ג', 'י"ד'];
+            const grades = ['ט\'', 'י\'', 'י"א', 'י"ב'];
             let mostCommonGrade = 'ט\'';
             let maxCount = 0;
 
