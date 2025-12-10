@@ -9,9 +9,15 @@ node_modules/
 
 # Database
 *.db
+*.db-shm
+*.db-wal
 *.sqlite
 *.sqlite3
+*.sqlite-shm
+*.sqlite-wal
 backend/prisma/dev.db
+backend/prisma/dev.db-shm
+backend/prisma/dev.db-wal
 
 # Build outputs
 dist/
