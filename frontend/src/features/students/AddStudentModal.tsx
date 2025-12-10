@@ -109,17 +109,74 @@ export function AddStudentModal({ isOpen, onClose, onSuccess, cohorts }: AddStud
       setErrors((prev) => ({ ...prev, [field]: '' }));
     }
 
-    // Only generate cohort suggestions for autocomplete (NO automatic completion)
+    // Only generate cohort suggestions for autocomplete
     if (field === 'cohort') {
       generateCohortSuggestions(value);
       
+      const trimmedValue = value.trim();
+      
       // If user entered a year (4 digits), convert to cohort name
-      if (/^\d{4}$/.test(value.trim())) {
-        const year = parseInt(value.trim(), 10);
+      if (/^\d{4}$/.test(trimmedValue)) {
+        const year = parseInt(trimmedValue, 10);
         const matchingCohort = cohorts.find(c => c.startYear === year);
         if (matchingCohort?.name) {
           // Update to cohort name and close suggestions
           setFormData((prev) => ({ ...prev, cohort: matchingCohort.name }));
+          setShowCohortSuggestions(false);
+        }
+      } else if (trimmedValue.length > 0) {
+        // Check if input is a partial gematria that matches exactly one cohort
+        // Helper to normalize gematria
+        const normalizeGematria = (str: string): string => {
+          return str.replace(/['"]/g, '').replace(/מחזור /g, '').trim();
+        };
+        
+        let gematriaInput = trimmedValue;
+        if (gematriaInput.startsWith('מחזור ')) {
+          gematriaInput = gematriaInput.substring('מחזור '.length);
+        }
+        const cleanGematriaInput = gematriaInput.replace(/['"]/g, '');
+        
+        // Find cohorts that match the gematria
+        // We need to separate exact matches from prefix matches to be smart about auto-completion
+        const exactMatches: typeof cohorts = [];
+        const prefixMatches: typeof cohorts = [];
+        
+        cohorts.forEach(cohort => {
+          const cohortGematria = normalizeGematria(cohort.name);
+          const cohortGematriaNoQuotes = cohortGematria.replace(/"/g, '');
+          
+          // Check for exact match (with or without quotes)
+          if (cohortGematria === cleanGematriaInput || 
+              cohortGematriaNoQuotes === cleanGematriaInput) {
+            exactMatches.push(cohort);
+          }
+          // Check for prefix match (but not if it's already an exact match)
+          else if (cohortGematria.startsWith(cleanGematriaInput) || 
+                   cohortGematriaNoQuotes.startsWith(cleanGematriaInput)) {
+            prefixMatches.push(cohort);
+          }
+        });
+        
+        // Smart auto-completion logic:
+        // 1. If there's exactly one exact match - auto-complete immediately
+        // 2. If there's exactly one prefix match AND no exact matches - auto-complete immediately
+        // 3. If there are multiple matches (exact or prefix) - just show suggestions, don't auto-complete
+        const shouldAutoComplete = 
+          (exactMatches.length === 1 && prefixMatches.length === 0) ||
+          (exactMatches.length === 0 && prefixMatches.length === 1);
+        
+        if (shouldAutoComplete && cleanGematriaInput.length >= 1) {
+          const matchedCohort = exactMatches.length > 0 ? exactMatches[0] : prefixMatches[0];
+          
+          // Auto-complete immediately
+          setFormData((prev) => {
+            // Only update if the value hasn't changed
+            if (prev.cohort === trimmedValue) {
+              return { ...prev, cohort: matchedCohort.name };
+            }
+            return prev;
+          });
           setShowCohortSuggestions(false);
         }
       }
@@ -134,26 +191,67 @@ export function AddStudentModal({ isOpen, onClose, onSuccess, cohorts }: AddStud
     }
 
     const suggestions: Array<{ value: string; label: string }> = [];
+    const inputTrimmed = input.trim();
 
-    // Add cohorts from the list that match
+    // Helper function to normalize gematria for comparison (remove quotes and apostrophes)
+    const normalizeGematria = (str: string): string => {
+      return str.replace(/['"]/g, '').replace(/מחזור /g, '').trim();
+    };
+
+    // Helper function to check if input matches gematria (handles partial matches)
+    const matchesGematria = (cohortName: string, input: string): boolean => {
+      const normalizedCohort = normalizeGematria(cohortName);
+      const normalizedInput = normalizeGematria(input);
+      
+      // Exact match
+      if (normalizedCohort === normalizedInput) return true;
+      
+      // Check if cohort name starts with input (for partial matches like "מח" -> "מ"ח")
+      if (normalizedCohort.startsWith(normalizedInput)) return true;
+      
+      // Check if input could be a partial gematria match
+      // For example: "מח" should match "מ"ח" (48)
+      // Remove quotes from both and check if they match
+      const cohortWithoutQuotes = normalizedCohort.replace(/"/g, '');
+      const inputWithoutQuotes = normalizedInput.replace(/"/g, '');
+      
+      if (cohortWithoutQuotes === inputWithoutQuotes) return true;
+      if (cohortWithoutQuotes.startsWith(inputWithoutQuotes)) return true;
+      
+      return false;
+    };
+
+    // Try to parse as partial gematria and find matching cohorts
+    // Remove "מחזור " prefix if exists
+    let gematriaInput = inputTrimmed;
+    if (gematriaInput.startsWith('מחזור ')) {
+      gematriaInput = gematriaInput.substring('מחזור '.length);
+    }
+    
+    // Remove quotes and apostrophes for matching
+    const cleanGematriaInput = gematriaInput.replace(/['"]/g, '');
+
+    // Add cohorts that match by gematria (partial or full)
     cohorts.forEach((cohort) => {
-      const nameMatch = cohort.name.toLowerCase().includes(input.toLowerCase());
-      const yearMatch = String(cohort.startYear).includes(input);
-      if (nameMatch || yearMatch) {
+      const nameMatch = matchesGematria(cohort.name, inputTrimmed);
+      const yearMatch = String(cohort.startYear).includes(inputTrimmed);
+      const textMatch = cohort.name.toLowerCase().includes(inputTrimmed.toLowerCase());
+      
+      if (nameMatch || yearMatch || textMatch) {
         suggestions.push({
-          value: cohort.name, // Always use cohort name (Gematria)
-          label: cohort.name, // Show only cohort name, not year
+          value: cohort.name,
+          label: cohort.name,
         });
       }
     });
 
     // If input looks like a year (4 digits), find the matching cohort name
-    const yearMatch = /^\d{4}$/.test(input);
+    const yearMatch = /^\d{4}$/.test(inputTrimmed);
     if (yearMatch) {
-      const year = parseInt(input, 10);
+      const year = parseInt(inputTrimmed, 10);
       if (year >= 1973 && year <= new Date().getFullYear() + 1) {
         const matchingCohort = cohorts.find(c => c.startYear === year);
-        if (matchingCohort) {
+        if (matchingCohort && !suggestions.find(s => s.value === matchingCohort.name)) {
           suggestions.unshift({
             value: matchingCohort.name,
             label: matchingCohort.name,
@@ -162,8 +260,53 @@ export function AddStudentModal({ isOpen, onClose, onSuccess, cohorts }: AddStud
       }
     }
 
-    setCohortSuggestions(suggestions.slice(0, 5)); // Limit to 5 suggestions
-    setShowCohortSuggestions(suggestions.length > 0);
+    // Try to parse as partial gematria and find the best match
+    // This works for all cohorts: א', ב', י"א, מ"ח, נ"ב, etc.
+    if (cleanGematriaInput.length > 0) {
+      // Try to find cohorts where the gematria matches (exact or starts with)
+      const matchingByGematria = cohorts.filter(cohort => {
+        const cohortGematria = normalizeGematria(cohort.name);
+        const cohortGematriaNoQuotes = cohortGematria.replace(/"/g, '');
+        
+        // Exact match (with or without quotes)
+        if (cohortGematria === cleanGematriaInput || 
+            cohortGematriaNoQuotes === cleanGematriaInput) {
+          return true;
+        }
+        
+        // Starts with match (for partial input)
+        if (cohortGematria.startsWith(cleanGematriaInput) || 
+            cohortGematriaNoQuotes.startsWith(cleanGematriaInput)) {
+          return true;
+        }
+        
+        return false;
+      });
+      
+      // Add exact matches first (they should appear at the top)
+      matchingByGematria.forEach(cohort => {
+        const cohortGematria = normalizeGematria(cohort.name);
+        const cohortGematriaNoQuotes = cohortGematria.replace(/"/g, '');
+        
+        const isExactMatch = cohortGematria === cleanGematriaInput || 
+                             cohortGematriaNoQuotes === cleanGematriaInput;
+        
+        if (isExactMatch && !suggestions.find(s => s.value === cohort.name)) {
+          suggestions.unshift({
+            value: cohort.name,
+            label: cohort.name,
+          });
+        }
+      });
+    }
+
+    // Remove duplicates and limit to 5 suggestions
+    const uniqueSuggestions = Array.from(
+      new Map(suggestions.map(s => [s.value, s])).values()
+    ).slice(0, 5);
+    
+    setCohortSuggestions(uniqueSuggestions);
+    setShowCohortSuggestions(uniqueSuggestions.length > 0);
   };
 
   const validate = async (): Promise<boolean> => {
@@ -182,112 +325,45 @@ export function AddStudentModal({ isOpen, onClose, onSuccess, cohorts }: AddStud
     }
 
     // Validate that cohort, grade, and study start date match
-    // Academic year is from 01.09.x to 01.09.(x+1)
     if (formData.cohort && formData.grade) {
       try {
-        const response = await apiClient.post('/cohorts/validate-match', {
+        // Check if cohort and grade match at the study start date
+        // If studyStartDate is provided, validate against that date
+        // Otherwise, validate against current date
+        const matchResponse = await apiClient.post('/cohorts/validate-match', {
           cohort: formData.cohort,
           grade: formData.grade,
+          studyStartDate: formData.studyStartDate || undefined,
         });
-        if (!response.data?.matches) {
-          newErrors.cohort = response.data?.error || 'המחזור והכיתה לא תואמים';
-          newErrors.grade = response.data?.error || 'המחזור והכיתה לא תואמים';
+        
+        if (!matchResponse.data?.matches) {
+          newErrors.cohort = matchResponse.data?.error || 'המחזור והכיתה לא תואמים';
+          newErrors.grade = matchResponse.data?.error || 'המחזור והכיתה לא תואמים';
+        } else if (formData.studyStartDate) {
+          // If they match, validate the date range
+          const dateValidationResponse = await apiClient.post('/cohorts/validate-start-date', {
+            cohort: formData.cohort,
+            grade: formData.grade,
+            studyStartDate: formData.studyStartDate,
+          });
+          
+          if (!dateValidationResponse.data?.valid) {
+            newErrors.studyStartDate = dateValidationResponse.data?.error || 'תאריך התחלת לימודים לא תקין';
+          }
         }
       } catch (error: any) {
-        const errorMsg = error.response?.data?.error || 'שגיאה באימות המחזור והכיתה';
+        const errorMsg = error.response?.data?.error || 'שגיאה באימות המחזור, הכיתה ותאריך ההתחלה';
         newErrors.cohort = errorMsg;
         newErrors.grade = errorMsg;
+        if (formData.studyStartDate) {
+          newErrors.studyStartDate = errorMsg;
+        }
       }
-    }
-    
-    // Validate study start date matches cohort and grade
-    // Academic year is from 01.09.x to 01.09.(x+1)
-    // Study start date must be 01.09 of the cohort's start year
-    if (formData.studyStartDate) {
+    } else if (formData.studyStartDate) {
+      // If only study start date is provided, validate it's a valid date
       const startDate = new Date(formData.studyStartDate);
       if (isNaN(startDate.getTime())) {
         newErrors.studyStartDate = 'תאריך התחלת לימודים לא תקין';
-      } else {
-        const dateYear = startDate.getFullYear();
-        const dateMonth = startDate.getMonth() + 1; // 1-12
-        const dateDay = startDate.getDate();
-        
-        // Check if date is September 1st
-        if (dateMonth !== 9 || dateDay !== 1) {
-          newErrors.studyStartDate = 'תאריך התחלת לימודים חייב להיות 01.09 (1 בספטמבר)';
-        } else {
-          // Validate against cohort if provided
-          if (formData.cohort) {
-            try {
-              const response = await apiClient.post('/cohorts/calculate-start-date', {
-                cohort: formData.cohort,
-              });
-              if (response.data?.startYear) {
-                const expectedYear = response.data.startYear;
-                if (dateYear !== expectedYear) {
-                  newErrors.studyStartDate = `תאריך התחלת לימודים צריך להיות 01.09.${expectedYear} לפי המחזור ${formData.cohort}`;
-                }
-              }
-            } catch (error: any) {
-              console.error('Error validating study start date:', error);
-            }
-          }
-          
-          // Validate against grade if provided (via cohort)
-          if (formData.grade && !formData.cohort) {
-            try {
-              const response = await apiClient.post('/cohorts/calculate-cohort', {
-                grade: formData.grade,
-              });
-              if (response.data?.cohort) {
-                const startDateResponse = await apiClient.post('/cohorts/calculate-start-date', {
-                  cohort: response.data.cohort,
-                });
-                if (startDateResponse.data?.startYear) {
-                  const expectedYear = startDateResponse.data.startYear;
-                  if (dateYear !== expectedYear) {
-                    newErrors.studyStartDate = `תאריך התחלת לימודים צריך להיות 01.09.${expectedYear} לפי הכיתה ${formData.grade}`;
-                  }
-                }
-              }
-            } catch (error: any) {
-              console.error('Error validating study start date from grade:', error);
-            }
-          }
-          
-          // If both cohort and grade provided, validate that they match and date is correct
-          if (formData.cohort && formData.grade) {
-            try {
-              // First check if cohort and grade match
-              const matchResponse = await apiClient.post('/cohorts/validate-match', {
-                cohort: formData.cohort,
-                grade: formData.grade,
-              });
-              
-              if (!matchResponse.data?.matches) {
-                newErrors.cohort = matchResponse.data?.error || 'המחזור והכיתה לא תואמים';
-                newErrors.grade = matchResponse.data?.error || 'המחזור והכיתה לא תואמים';
-              } else {
-                // If they match, validate the date
-                const cohortResponse = await apiClient.post('/cohorts/calculate-start-date', {
-                  cohort: formData.cohort,
-                });
-                
-                if (cohortResponse.data?.startYear) {
-                  const expectedYear = cohortResponse.data.startYear;
-                  if (dateYear !== expectedYear) {
-                    newErrors.studyStartDate = `תאריך התחלת לימודים צריך להיות 01.09.${expectedYear} לפי המחזור ${formData.cohort} והכיתה ${formData.grade}`;
-                  }
-                }
-              }
-            } catch (error: any) {
-              const errorMsg = error.response?.data?.error || 'שגיאה באימות המחזור, הכיתה ותאריך ההתחלה';
-              newErrors.cohort = errorMsg;
-              newErrors.grade = errorMsg;
-              newErrors.studyStartDate = errorMsg;
-            }
-          }
-        }
       }
     }
 
@@ -587,7 +663,61 @@ export function AddStudentModal({ isOpen, onClose, onSuccess, cohorts }: AddStud
                     // Check if focus is moving to suggestions dropdown
                     const relatedTarget = (e.relatedTarget as HTMLElement);
                     if (!relatedTarget || !relatedTarget.closest('.cohort-suggestions')) {
-                      setTimeout(() => setShowCohortSuggestions(false), 200);
+                      setTimeout(() => {
+                        setShowCohortSuggestions(false);
+                        
+                        // Smart auto-complete on blur: only if there's exactly one unique match
+                        const trimmedValue = formData.cohort.trim();
+                        if (trimmedValue.length > 0 && !trimmedValue.match(/^\d{4}$/)) {
+                          // Helper to normalize gematria
+                          const normalizeGematria = (str: string): string => {
+                            return str.replace(/['"]/g, '').replace(/מחזור /g, '').trim();
+                          };
+                          
+                          let gematriaInput = trimmedValue;
+                          if (gematriaInput.startsWith('מחזור ')) {
+                            gematriaInput = gematriaInput.substring('מחזור '.length);
+                          }
+                          const cleanGematriaInput = gematriaInput.replace(/['"]/g, '');
+                          
+                          // Separate exact matches from prefix matches
+                          const exactMatches: typeof cohorts = [];
+                          const prefixMatches: typeof cohorts = [];
+                          
+                          cohorts.forEach(cohort => {
+                            const cohortGematria = normalizeGematria(cohort.name);
+                            const cohortGematriaNoQuotes = cohortGematria.replace(/"/g, '');
+                            
+                            // Check for exact match (with or without quotes)
+                            if (cohortGematria === cleanGematriaInput || 
+                                cohortGematriaNoQuotes === cleanGematriaInput) {
+                              exactMatches.push(cohort);
+                            }
+                            // Check for prefix match (but not if it's already an exact match)
+                            else if (cohortGematria.startsWith(cleanGematriaInput) || 
+                                     cohortGematriaNoQuotes.startsWith(cleanGematriaInput)) {
+                              prefixMatches.push(cohort);
+                            }
+                          });
+                          
+                          // Smart auto-completion: only if there's exactly one unique match
+                          // This prevents auto-completing "מח" to "מ"ח" when "מח"ז" also exists
+                          const shouldAutoComplete = 
+                            (exactMatches.length === 1 && prefixMatches.length === 0) ||
+                            (exactMatches.length === 0 && prefixMatches.length === 1);
+                          
+                          if (shouldAutoComplete && cleanGematriaInput.length >= 1) {
+                            const matchedCohort = exactMatches.length > 0 ? exactMatches[0] : prefixMatches[0];
+                            setFormData((prev) => {
+                              // Only update if the value hasn't changed
+                              if (prev.cohort === trimmedValue) {
+                                return { ...prev, cohort: matchedCohort.name };
+                              }
+                              return prev;
+                            });
+                          }
+                        }
+                      }, 200);
                     }
                   }}
                   error={errors.cohort || errors.cohortId}

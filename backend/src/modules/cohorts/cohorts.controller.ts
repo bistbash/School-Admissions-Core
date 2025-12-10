@@ -231,11 +231,13 @@ export class CohortsController {
   /**
    * Validate that cohort and grade match
    * POST /api/cohorts/validate-match
-   * Body: { cohort: string | number, grade: string }
+   * Body: { cohort: string | number, grade: string, studyStartDate?: string (ISO date) }
+   * If studyStartDate is provided, validates against the grade at that date
+   * Otherwise, validates against the current grade
    */
   async validateMatch(req: Request, res: Response, next: NextFunction) {
     try {
-      const { cohort, grade } = req.body;
+      const { cohort, grade, studyStartDate } = req.body;
       if (!cohort || !grade) {
         return res.status(400).json({ 
           error: 'נדרש לספק מחזור וכיתה',
@@ -247,15 +249,55 @@ export class CohortsController {
       const cohortsService = new CohortsService();
       
       const startYear = parseCohortInput(cohort);
-      const expectedGrade = cohortsService.calculateGradeFromCohort(startYear);
+      
+      // If studyStartDate is provided, check the grade at that date
+      // Otherwise, check the current grade
+      let expectedGrade: string | null;
+      let cohortStatusMessage: string | null = null;
+      
+      if (studyStartDate) {
+        const targetDate = new Date(studyStartDate);
+        if (isNaN(targetDate.getTime())) {
+          return res.status(400).json({
+            matches: false,
+            error: 'תאריך התחלת לימודים לא תקין'
+          });
+        }
+        
+        // Check if the date is within the cohort's active period
+        const cohortStartDate = new Date(startYear, 8, 1); // September 1st of start year
+        const cohortEndDate = new Date(startYear + 5, 8, 1); // September 1st of start year + 5
+        
+        if (targetDate < cohortStartDate) {
+          const startDateStr = `${cohortStartDate.getDate().toString().padStart(2, '0')}.${(cohortStartDate.getMonth() + 1).toString().padStart(2, '0')}.${cohortStartDate.getFullYear()}`;
+          cohortStatusMessage = `המחזור ${startYear} עדיין לא התחיל. המחזור יתחיל ב-${startDateStr}`;
+        } else if (targetDate >= cohortEndDate) {
+          const endDateStr = `${cohortEndDate.getDate().toString().padStart(2, '0')}.${(cohortEndDate.getMonth() + 1).toString().padStart(2, '0')}.${cohortEndDate.getFullYear()}`;
+          cohortStatusMessage = `המחזור ${startYear} כבר הסתיים. המחזור הסתיים ב-${endDateStr}`;
+        } else {
+          expectedGrade = cohortsService.calculateGradeAtDate(startYear, targetDate);
+        }
+      } else {
+        expectedGrade = cohortsService.calculateGradeFromCohort(startYear);
+      }
       
       const matches = expectedGrade === grade;
       
       if (!matches) {
-        return res.status(400).json({
-          matches: false,
-          error: `המחזור והכיתה לא תואמים. מחזור ${startYear} אמור להיות בכיתה ${expectedGrade || 'לא פעיל'}, אבל הוזן ${grade}`
-        });
+        if (cohortStatusMessage) {
+          // If cohort is not active, show the specific message
+          return res.status(400).json({
+            matches: false,
+            error: cohortStatusMessage
+          });
+        } else {
+          // If cohort is active but grade doesn't match
+          const dateContext = studyStartDate ? ` בתאריך ${studyStartDate}` : ' כרגע';
+          return res.status(400).json({
+            matches: false,
+            error: `המחזור והכיתה לא תואמים. מחזור ${startYear}${dateContext} אמור להיות בכיתה ${expectedGrade || 'לא פעיל'}, אבל הוזן ${grade}`
+          });
+        }
       }
 
       res.json({ matches: true });
@@ -263,6 +305,115 @@ export class CohortsController {
       res.status(400).json({ 
         matches: false,
         error: error.message || 'שגיאה באימות המחזור והכיתה' 
+      });
+    }
+  }
+
+  /**
+   * Validate study start date based on cohort and grade
+   * POST /api/cohorts/validate-start-date
+   * Body: { cohort: string | number, grade: string, studyStartDate: string (ISO date) }
+   * Returns: { valid: boolean, error?: string, minDate?: string, maxDate?: string }
+   */
+  async validateStartDate(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { cohort, grade, studyStartDate } = req.body;
+      
+      if (!cohort || !grade || !studyStartDate) {
+        return res.status(400).json({ 
+          valid: false,
+          error: 'נדרש לספק מחזור, כיתה ותאריך התחלת לימודים'
+        });
+      }
+
+      const { parseCohortInput } = await import('./cohorts.service');
+      const cohortStartYear = parseCohortInput(cohort);
+      
+      // Parse the study start date
+      const startDate = new Date(studyStartDate);
+      if (isNaN(startDate.getTime())) {
+        return res.status(400).json({ 
+          valid: false,
+          error: 'תאריך התחלת לימודים לא תקין'
+        });
+      }
+
+      // First, check if the date is within the cohort's active period
+      // Cohorts are active from ט' (start year) to י"ד (start year + 5)
+      const cohortStartDate = new Date(cohortStartYear, 8, 1); // September 1st of start year (ט')
+      const cohortEndDate = new Date(cohortStartYear + 5, 8, 1); // September 1st of start year + 5 (י"ד)
+      
+      if (startDate < cohortStartDate) {
+        const startDateStr = `${cohortStartDate.getDate().toString().padStart(2, '0')}.${(cohortStartDate.getMonth() + 1).toString().padStart(2, '0')}.${cohortStartDate.getFullYear()}`;
+        return res.json({
+          valid: false,
+          error: `המחזור ${cohortStartYear} עדיין לא התחיל בתאריך זה. המחזור יתחיל ב-${startDateStr}`,
+          minDate: cohortStartDate.toISOString().split('T')[0],
+          maxDate: cohortEndDate.toISOString().split('T')[0],
+        });
+      } else if (startDate >= cohortEndDate) {
+        const endDateStr = `${cohortEndDate.getDate().toString().padStart(2, '0')}.${(cohortEndDate.getMonth() + 1).toString().padStart(2, '0')}.${cohortEndDate.getFullYear()}`;
+        return res.json({
+          valid: false,
+          error: `המחזור ${cohortStartYear} כבר הסתיים בתאריך זה. המחזור הסתיים ב-${endDateStr}`,
+          minDate: cohortStartDate.toISOString().split('T')[0],
+          maxDate: cohortEndDate.toISOString().split('T')[0],
+        });
+      }
+
+      // Grade to number mapping
+      const gradeToNumber: Record<string, number> = {
+        'ט\'': 9,
+        'י\'': 10,
+        'י"א': 11,
+        'י"ב': 12,
+        'י"ג': 13,
+        'י"ד': 14,
+      };
+
+      const gradeNumber = gradeToNumber[grade];
+      if (!gradeNumber) {
+        return res.status(400).json({ 
+          valid: false,
+          error: `כיתה לא תקינה: "${grade}"`
+        });
+      }
+
+      // Calculate the expected start date range
+      // For cohort year X and grade ג':
+      // - Grade ט' (9) → start date should be between Sept 1, X and Sept 1, X+1
+      // - Grade י' (10) → start date should be between Sept 1, X+1 and Sept 1, X+2
+      // - Grade י"א (11) → start date should be between Sept 1, X+2 and Sept 1, X+3
+      // Formula: yearsToAdd = gradeNumber - 9
+      const yearsToAdd = gradeNumber - 9;
+      const minYear = cohortStartYear + yearsToAdd;
+      const maxYear = cohortStartYear + yearsToAdd + 1;
+
+      const minDate = new Date(minYear, 8, 1); // September 1st (month is 0-indexed)
+      const maxDate = new Date(maxYear, 8, 1); // September 1st of next year
+
+      // Check if date is within range (inclusive of minDate, exclusive of maxDate)
+      if (startDate < minDate || startDate >= maxDate) {
+        const minDateStr = `${minDate.getDate().toString().padStart(2, '0')}.${(minDate.getMonth() + 1).toString().padStart(2, '0')}.${minDate.getFullYear()}`;
+        const maxDateStr = `${maxDate.getDate().toString().padStart(2, '0')}.${(maxDate.getMonth() + 1).toString().padStart(2, '0')}.${maxDate.getFullYear()}`;
+        
+        return res.json({
+          valid: false,
+          error: `תאריך התחלת לימודים חייב להיות בין ${minDateStr} ל-${maxDateStr} לפי המחזור ${cohortStartYear} והכיתה ${grade}`,
+          minDate: minDate.toISOString().split('T')[0],
+          maxDate: maxDate.toISOString().split('T')[0],
+        });
+      }
+
+      res.json({ 
+        valid: true,
+        minDate: minDate.toISOString().split('T')[0],
+        maxDate: maxDate.toISOString().split('T')[0],
+      });
+    } catch (error: any) {
+      res.status(400).json({ 
+        valid: false,
+        error: error.message || 'שגיאה באימות תאריך התחלת הלימודים' 
       });
     }
   }

@@ -30,6 +30,7 @@ router.post('/calculate-cohort', cohortsController.calculateCohort.bind(cohortsC
 router.post('/calculate-start-date', cohortsController.calculateStartDate.bind(cohortsController));
 router.post('/calculate-from-start-date', cohortsController.calculateFromStartDate.bind(cohortsController));
 router.post('/validate-match', cohortsController.validateMatch.bind(cohortsController));
+router.post('/validate-start-date', cohortsController.validateStartDate.bind(cohortsController));
 router.post('/refresh', cohortsController.refresh.bind(cohortsController));
 router.post('/', validateRequest(createCohortSchema), cohortsController.create.bind(cohortsController));
 router.get('/', cohortsController.getAll.bind(cohortsController));

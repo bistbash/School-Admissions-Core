@@ -263,6 +263,65 @@ export class CohortsService {
   }
 
   /**
+   * Calculate what grade a cohort was in at a specific date
+   * This is used for validation when adding students with historical start dates
+   * @param startYear - The cohort's start year
+   * @param targetDate - The date to check (defaults to current date)
+   * @returns The grade the cohort was in at that date, or null if not started yet
+   */
+  calculateGradeAtDate(startYear: number, targetDate: Date = new Date()): string | null {
+    const targetYear = targetDate.getFullYear();
+    const targetMonth = targetDate.getMonth() + 1; // 1-12
+    const targetDay = targetDate.getDate();
+    
+    // Check if we're on or after September 1st of the target year
+    const isAfterSeptember1st = targetMonth > 9 || (targetMonth === 9 && targetDay >= 1);
+    
+    // Calculate the academic year offset
+    const academicYearOffset = isAfterSeptember1st ? 0 : 1;
+    
+    // Calculate years difference from the "target academic year"
+    const academicStartYear = targetYear - academicYearOffset;
+    const yearsDiff = academicStartYear - startYear;
+
+    // Target academic year + 1 = NO GRADE (next cohort, hasn't started yet)
+    if (yearsDiff === -1) {
+      return null;
+    }
+    // Target academic year = ט' (1st year)
+    if (yearsDiff === 0) {
+      return 'ט\'';
+    }
+    // Target academic year - 1 = י' (2nd year)
+    if (yearsDiff === 1) {
+      return 'י\'';
+    }
+    // Target academic year - 2 = י"א (3rd year)
+    if (yearsDiff === 2) {
+      return 'י"א';
+    }
+    // Target academic year - 3 = י"ב (4th year)
+    if (yearsDiff === 3) {
+      return 'י"ב';
+    }
+    // Target academic year - 4 = י"ג (5th year)
+    if (yearsDiff === 4) {
+      return 'י"ג';
+    }
+    // Target academic year - 5 = י"ד (6th year)
+    if (yearsDiff === 5) {
+      return 'י"ד';
+    }
+    // Target academic year - 6 and older = י"ד (graduated)
+    if (yearsDiff >= 6) {
+      return 'י"ד';
+    }
+    
+    // Before cohort started (yearsDiff < -1)
+    return null;
+  }
+
+  /**
    * Calculate cohort startYear from grade
    * Given a grade, calculates what startYear a cohort should have to be in that grade now
    * Returns the most likely startYear (current academic year cohort for that grade)
