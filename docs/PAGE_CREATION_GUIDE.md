@@ -1,142 +1,91 @@
-# מדריך יצירת דפים חדשים במערכת
+# Page Creation Guide
 
-מדריך זה מסביר איך ליצור דף חדש במערכת בצורה מסודרת וקלה.
+How to create new pages in the system.
 
-## כלי יצירת דפים
+---
 
-המערכת כוללת כלי CLI שיוצר אוטומטית את כל הקבצים הנדרשים לדף חדש.
+## Quick Method
 
-### שימוש בסיסי
+Use the page generator:
 
 ```bash
 cd backend
 npm run create-page
 ```
 
-הכלי יבקש ממך את כל הפרטים הנדרשים:
-- שם הדף (באנגלית)
-- שם תצוגה (עברית ואנגלית)
-- תיאור
-- קטגוריה
-- האם תומך במצב עריכה
-- API endpoints לצפייה
-- API endpoints לעריכה
-- מצבי צפייה מותאמים אישית (אופציונלי)
+The tool will:
+1. Update `permission-registry.ts`
+2. Create React component
+3. Generate documentation
 
-### מה הכלי יוצר?
+---
 
-1. **עדכון permission-registry.ts** - מוסיף את ההגדרות של הדף
-2. **יצירת קובץ React** - יוצר את קומפוננטת הדף ב-frontend
-3. **יצירת תיעוד** - יוצר קובץ markdown עם כל הפרטים
+## Manual Method
 
-## שלבים נוספים לאחר יצירת הדף
-
-לאחר שהכלי יוצר את הדף, יש לבצע את השלבים הבאים:
-
-### 1. הוספת Route ב-Frontend
-
-הוסף את הדף ל-router שלך (בדרך כלל ב-`App.tsx` או קובץ routing):
-
-```tsx
-import { ${ComponentName} } from './features/${page-name}/${ComponentName}';
-
-// ב-routes:
-<Route path="${page-name}" element={<${ComponentName} />} />
-```
-
-### 2. הוספה ל-Sidebar Navigation
-
-הוסף את הדף ל-sidebar navigation כך שמשתמשים יוכלו לגשת אליו.
-
-### 3. יצירת API Endpoints (אם נדרש)
-
-אם ה-API endpoints שציינת לא קיימים, צור אותם ב-backend:
-- Controller
-- Service
-- Routes
-
-### 4. בדיקת הרשאות
-
-ודא שההרשאות עובדות:
-- בדוק שהדף מופיע ב-permission manager
-- בדוק שצפייה ועריכה עובדות
-- בדוק מצבי צפייה מותאמים אישית (אם הוגדרו)
-
-## דוגמה: יצירת דף "ניהול ציוד"
-
-```bash
-npm run create-page
-```
-
-תשובות לדוגמה:
-- שם הדף: `equipment`
-- שם תצוגה: `Equipment`
-- שם תצוגה בעברית: `ניהול ציוד`
-- תיאור: `Manage school equipment`
-- תיאור בעברית: `ניהול ציוד בית ספר`
-- קטגוריה: `2` (אקדמי)
-- תומך במצב עריכה: `y`
-- View APIs:
-  - Resource: `equipment`, Action: `read`, Method: `GET`, Path: `/api/equipment`
-- Edit APIs:
-  - Resource: `equipment`, Action: `create`, Method: `POST`, Path: `/api/equipment`
-  - Resource: `equipment`, Action: `update`, Method: `PUT`, Path: `/api/equipment/:id`
-  - Resource: `equipment`, Action: `delete`, Method: `DELETE`, Path: `/api/equipment/:id`
-
-## מצבי צפייה מותאמים אישית
-
-אם הדף צריך מצבי צפייה שונים (למשל: מורה רואה דברים שונים ממנהל), תוכל להגדיר אותם:
-
-### דוגמה: דף תלמידים עם מצבי צפייה
-
-- **מורה**: רואה רק את התלמידים שלה
-- **יועצת**: רואה את כל התלמידים + מידע נוסף
-- **מנהל**: רואה הכל + יכול לערוך
-
-כל מצב יכול להגדיר APIs משלו ב-`viewAPIs` ו-`editAPIs`.
-
-## מבנה Permission Registry
-
-כל דף ב-`permission-registry.ts` מכיל:
+### 1. Add to Permission Registry
 
 ```typescript
-'page-name': {
-  page: 'page-name',
-  displayName: 'Display Name',
-  displayNameHebrew: 'שם תצוגה',
-  description: 'Description',
-  descriptionHebrew: 'תיאור',
-  detailedExplanation: 'הסבר מפורט...',
-  category: 'academic' | 'general' | 'administration' | 'security',
-  categoryHebrew: 'אקדמי' | 'כללי' | 'ניהול' | 'אבטחה',
-  viewAPIs: [...], // APIs לצפייה
-  editAPIs: [...], // APIs לעריכה
-  supportsEditMode: true | false,
-  customModes: [...] // מצבי צפייה מותאמים אישית (אופציונלי)
+// backend/src/lib/permissions/permission-registry.ts
+'my-page': {
+  page: 'my-page',
+  displayName: 'My Page',
+  displayNameHebrew: 'הדף שלי',
+  category: 'general',
+  viewAPIs: [
+    { resource: 'my-resource', action: 'read', method: 'GET', path: '/api/my-resource' }
+  ],
+  editAPIs: [
+    { resource: 'my-resource', action: 'create', method: 'POST', path: '/api/my-resource' }
+  ],
+  supportsEditMode: true
 }
 ```
 
-## טיפים
+### 2. Seed Permissions
 
-1. **שמות עקביים**: השתמש בשמות עקביים לדפים (lowercase עם מקפים)
-2. **תיאורים ברורים**: כתוב תיאורים ברורים בעברית ובאנגלית
-3. **APIs רלוונטיים**: הוסף רק APIs שהדף באמת צריך
-4. **מצבי צפייה**: השתמש במצבי צפייה מותאמים אישית רק כשצריך
-5. **תיעוד**: עדכן את התיעוד כשמוסיפים תכונות חדשות
+```bash
+npm run seed-permissions
+```
 
-## פתרון בעיות
+### 3. Create Frontend Page
 
-### הדף לא מופיע ב-permission manager
-- ודא שהוספת אותו ל-`permission-registry.ts`
-- ודא שהשם נכון (lowercase עם מקפים)
-- רענן את הדף
+```tsx
+// frontend/src/features/my-page/MyPage.tsx
+export function MyPage() {
+  return <PageWrapper title="My Page">Content</PageWrapper>;
+}
+```
 
-### הרשאות לא עובדות
-- בדוק שה-API endpoints קיימים
-- בדוק שה-permissions נוצרו ב-database
-- בדוק את ה-logs ב-backend
+### 4. Add Route
 
-### מצבי צפייה לא עובדים
-- ודא שהוגדרו ב-`customModes`
-- ודא שה-APIs שלהם מוגדרים נכון
-- בדוק שה-permissions ניתנו למשתמש/תפקיד
+```tsx
+// frontend/src/App.tsx
+<Route 
+  path="my-page" 
+  element={
+    <PermissionGuard page="my-page" pageAction="view">
+      <MyPage />
+    </PermissionGuard>
+  } 
+/>
+```
+
+### 5. Protect API Routes
+
+```typescript
+// backend/src/modules/my-resource/my-resource.routes.ts
+router.get(
+  '/',
+  requireResourcePagePermission('my-resource', 'read'),
+  controller.getAll
+);
+```
+
+---
+
+## Next Steps
+
+1. Add to sidebar navigation
+2. Create API endpoints (if needed)
+3. Test permissions
+4. Update documentation

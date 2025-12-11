@@ -7,7 +7,43 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
+// ASCII Art
+const BANNER = `
+╔══════════════════════════════════════════════════════════╗
+║                                                          ║
+║              📋 List Blocked IPs Tool                   ║
+║                                                          ║
+╚══════════════════════════════════════════════════════════╝
+`;
+
+// Colors
+const GREEN = '\x1b[32m';
+const YELLOW = '\x1b[33m';
+const RED = '\x1b[31m';
+const CYAN = '\x1b[36m';
+const BLUE = '\x1b[34m';
+const RESET = '\x1b[0m';
+const BOLD = '\x1b[1m';
+
+function printSuccess(msg: string) {
+  console.log(`${GREEN}✅ ${msg}${RESET}`);
+}
+
+function printError(msg: string) {
+  console.log(`${RED}❌ ${msg}${RESET}`);
+}
+
+function printInfo(msg: string) {
+  console.log(`${CYAN}ℹ️  ${msg}${RESET}`);
+}
+
+function printHeader(msg: string) {
+  console.log(`${BOLD}${BLUE}${msg}${RESET}`);
+}
+
 async function listBlockedIPs() {
+  console.log(BANNER);
+
   try {
     const blockedIPs = await prisma.blockedIP.findMany({
       where: { isActive: true },
@@ -15,29 +51,35 @@ async function listBlockedIPs() {
     });
 
     if (blockedIPs.length === 0) {
-      console.log('✅ No IPs are currently blocked');
+      printSuccess('No IPs are currently blocked');
       return;
     }
 
-    console.log(`\n📋 Found ${blockedIPs.length} blocked IP(s):\n`);
-    
+    console.log('');
+    printHeader(`Found ${blockedIPs.length} blocked IP(s):`);
+    console.log('');
+
     blockedIPs.forEach((ip, index) => {
-      console.log(`${index + 1}. IP: ${ip.ipAddress}`);
+      console.log(`${BOLD}${index + 1}.${RESET} IP: ${CYAN}${ip.ipAddress}${RESET}`);
       console.log(`   Reason: ${ip.reason || 'No reason provided'}`);
       console.log(`   Blocked at: ${ip.blockedAt.toLocaleString()}`);
+      
       if (ip.expiresAt) {
         const isExpired = ip.expiresAt < new Date();
-        console.log(`   Expires at: ${ip.expiresAt.toLocaleString()} ${isExpired ? '(EXPIRED)' : ''}`);
+        const status = isExpired ? `${RED}(EXPIRED)${RESET}` : '';
+        console.log(`   Expires at: ${ip.expiresAt.toLocaleString()} ${status}`);
       } else {
-        console.log(`   Status: PERMANENT`);
+        console.log(`   Status: ${YELLOW}PERMANENT${RESET}`);
       }
       console.log('');
     });
 
-    console.log('\nTo unblock an IP, use:');
-    console.log('npx tsx scripts/unblock-ip.ts <IP_ADDRESS>\n');
+    console.log('');
+    printInfo('To unblock an IP, use:');
+    console.log(`  ${BOLD}npx tsx scripts/unblock-ip.ts <IP_ADDRESS>${RESET}`);
+    console.log('');
   } catch (error: any) {
-    console.error(`❌ Error listing blocked IPs: ${error.message}`);
+    printError(`Error listing blocked IPs: ${error.message}`);
     process.exit(1);
   } finally {
     await prisma.$disconnect();
@@ -45,6 +87,3 @@ async function listBlockedIPs() {
 }
 
 listBlockedIPs();
-
-
-

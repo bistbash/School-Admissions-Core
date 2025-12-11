@@ -1,17 +1,18 @@
 /**
- * Emergency script to unblock ALL IPs
- * Usage: npx tsx scripts/unblock-all-ips.ts
+ * Reset database script
+ * Usage: npx tsx scripts/reset-db.ts [--confirm]
  */
 
 import { PrismaClient } from '@prisma/client';
+import { execSync } from 'child_process';
 
 const prisma = new PrismaClient();
 
-// ASCII Art
+// ASCII Art Banner
 const BANNER = `
 ╔══════════════════════════════════════════════════════════╗
 ║                                                          ║
-║         🚨 EMERGENCY: Unblock ALL IPs Tool            ║
+║            🗑️  Database Reset Tool                       ║
 ║                                                          ║
 ╚══════════════════════════════════════════════════════════╝
 `;
@@ -21,6 +22,7 @@ const GREEN = '\x1b[32m';
 const RED = '\x1b[31m';
 const YELLOW = '\x1b[33m';
 const CYAN = '\x1b[36m';
+const BLUE = '\x1b[34m';
 const RESET = '\x1b[0m';
 const BOLD = '\x1b[1m';
 
@@ -40,29 +42,44 @@ function printInfo(msg: string) {
   console.log(`${CYAN}ℹ️  ${msg}${RESET}`);
 }
 
-async function unblockAllIPs() {
+function printHeader(msg: string) {
+  console.log(`${BOLD}${BLUE}${msg}${RESET}`);
+}
+
+async function resetDatabase() {
   console.log(BANNER);
-  printWarning('This will unblock ALL blocked IP addresses!');
-  printInfo('Attempting to unblock all IPs...');
+  printWarning('This will DELETE ALL DATA from the database!');
+  printInfo('This action cannot be undone.');
   console.log('');
 
-  try {
-    const result = await prisma.blockedIP.updateMany({
-      where: { isActive: true },
-      data: { isActive: false },
-    });
+  const args = process.argv.slice(2);
+  const confirmed = args.includes('--confirm');
 
-    printSuccess(`Successfully unblocked ${result.count} IP address(es)`);
+  if (!confirmed) {
+    printError('This is a destructive operation. Use --confirm flag to proceed.');
+    console.log('');
+    console.log(`${BOLD}Usage:${RESET}`);
+    console.log(`  npx tsx scripts/reset-db.ts --confirm`);
+    console.log('');
+    process.exit(1);
+  }
+
+  try {
+    printInfo('Resetting database...');
     
-    if (result.count === 0) {
-      printInfo('No IPs were blocked');
-    }
+    // Run Prisma reset
+    printInfo('Running Prisma reset...');
+    execSync('npx prisma migrate reset --force', { stdio: 'inherit' });
+    
+    printSuccess('Database reset completed successfully!');
+    printInfo('Run "npm run seed" to populate initial data.');
+    console.log('');
   } catch (error: any) {
-    printError(`Error unblocking IPs: ${error.message}`);
+    printError(`Failed to reset database: ${error.message}`);
     process.exit(1);
   } finally {
     await prisma.$disconnect();
   }
 }
 
-unblockAllIPs();
+resetDatabase();

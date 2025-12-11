@@ -1,152 +1,42 @@
 # API Reference
 
-תיעוד מקיף של כל ה-API endpoints במערכת.
-
----
-
-## תוכן עניינים
-
-1. [Authentication](#authentication)
-2. [Students](#students)
-3. [Cohorts](#cohorts)
-4. [Tracks](#tracks)
-5. [Classes](#classes)
-6. [Permissions](#permissions)
-7. [SOC](#soc)
-8. [API Keys](#api-keys)
-9. [Search](#search)
-10. [Common Patterns](#common-patterns)
+API endpoints documentation.
 
 ---
 
 ## Authentication
 
 ### POST /api/auth/login
-
-התחברות למשתמש.
+Login user.
 
 **Request:**
 ```json
-{
-  "email": "user@example.com",
-  "password": "password123"
-}
+{ "email": "user@example.com", "password": "password" }
 ```
 
 **Response:**
 ```json
-{
-  "token": "jwt-token-here",
-  "user": {
-    "id": 1,
-    "email": "user@example.com",
-    "name": "John Doe",
-    "isAdmin": false
-  }
-}
+{ "token": "jwt-token", "user": { "id": 1, "email": "..." } }
 ```
-
-**Permissions:** Public
-
----
-
-### GET /api/auth/me
-
-קבלת פרטי המשתמש הנוכחי.
-
-**Response:**
-```json
-{
-  "id": 1,
-  "email": "user@example.com",
-  "name": "John Doe",
-  "isAdmin": false,
-  "approvalStatus": "APPROVED"
-}
-```
-
-**Permissions:** Authenticated
-
----
-
-### POST /api/auth/complete-profile
-
-השלמת פרופיל משתמש.
-
-**Request:**
-```json
-{
-  "personalNumber": "123456789",
-  "name": "John Doe",
-  "type": "PERMANENT"
-}
-```
-
-**Permissions:** Authenticated (only if needsProfileCompletion)
 
 ---
 
 ## Students
 
 ### GET /api/students
+Get all students.
 
-קבלת רשימת תלמידים.
-
-**Query Parameters:**
-- `status` - ACTIVE, GRADUATED, LEFT, ARCHIVED
-- `grade` - ט', י', י"א, י"ב
-- `cohortId` - ID של מחזור
-- `gender` - MALE, FEMALE
-- `academicYear` - שנת לימודים
-
-**Response:**
-```json
-[
-  {
-    "id": 1,
-    "idNumber": "123456789",
-    "firstName": "John",
-    "lastName": "Doe",
-    "gender": "MALE",
-    "cohort": {
-      "id": 1,
-      "name": "Cohort 2024",
-      "startYear": 2024
-    },
-    "status": "ACTIVE"
-  }
-]
-```
+**Query:** `status`, `grade`, `cohortId`, `gender`, `academicYear`
 
 **Permissions:** `students:read` or `page:students:view`
-
----
 
 ### GET /api/students/:id
-
-קבלת תלמיד לפי ID.
-
-**Response:**
-```json
-{
-  "id": 1,
-  "idNumber": "123456789",
-  "firstName": "John",
-  "lastName": "Doe",
-  "gender": "MALE",
-  "cohort": { ... },
-  "enrollments": [ ... ],
-  "status": "ACTIVE"
-}
-```
+Get student by ID.
 
 **Permissions:** `students:read` or `page:students:view`
 
----
-
 ### POST /api/students
-
-יצירת תלמיד חדש.
+Create student.
 
 **Request:**
 ```json
@@ -156,65 +46,27 @@
   "lastName": "Doe",
   "gender": "MALE",
   "cohort": 2024,
-  "studyStartDate": "2024-09-01T00:00:00Z"
-}
-```
-
-**Response:**
-```json
-{
-  "id": 1,
-  "idNumber": "123456789",
-  "firstName": "John",
-  "lastName": "Doe",
-  ...
+  "studyStartDate": "2024-09-01",
+  "grade": "ט'",
+  "parallel": "1",
+  "track": "מדעים"
 }
 ```
 
 **Permissions:** `students:create` or `page:students:edit`
 
----
-
 ### PUT /api/students/:id
-
-עדכון תלמיד.
-
-**Request:**
-```json
-{
-  "firstName": "Jane",
-  "status": "GRADUATED"
-}
-```
+Update student.
 
 **Permissions:** `students:update` or `page:students:edit`
 
----
-
 ### DELETE /api/students/:id
-
-מחיקת תלמיד.
+Delete student.
 
 **Permissions:** `students:delete` or `page:students:edit`
 
----
-
 ### POST /api/students/upload
-
-העלאת קובץ Excel עם תלמידים.
-
-**Request:** Multipart form data
-- `file` - Excel file
-
-**Response:**
-```json
-{
-  "success": true,
-  "created": 10,
-  "updated": 5,
-  "errors": []
-}
-```
+Upload students from Excel file.
 
 **Permissions:** `students:create` or `page:students:edit`
 
@@ -223,217 +75,51 @@
 ## Cohorts
 
 ### GET /api/cohorts
+Get all cohorts.
 
-קבלת רשימת מחזורים.
-
-**Query Parameters:**
-- `isActive` - true/false
-
-**Response:**
-```json
-[
-  {
-    "id": 1,
-    "name": "Cohort 2024",
-    "startYear": 2024,
-    "isActive": true
-  }
-]
-```
+**Query:** `isActive` (true/false)
 
 **Permissions:** `cohorts:read` or `page:students:view`
-
----
-
-### GET /api/cohorts/:id
-
-קבלת מחזור לפי ID.
-
-**Permissions:** `cohorts:read` or `page:students:view`
-
----
 
 ### POST /api/cohorts/calculate-grade
+Calculate grade from cohort.
 
-חישוב כיתה לפי מחזור ושנה.
+**Request:** `{ "cohort": 2024 }`
 
-**Request:**
-```json
-{
-  "cohortYear": 2024,
-  "academicYear": 2025
-}
-```
+**Response:** `{ "grade": "ט'" }`
 
-**Response:**
-```json
-{
-  "grade": "י'"
-}
-```
+### POST /api/cohorts/calculate-cohort
+Calculate cohort from grade.
 
-**Permissions:** Public (utility endpoint)
+**Request:** `{ "grade": "י'" }`
 
----
-
-## Tracks
-
-### GET /api/tracks
-
-קבלת רשימת מגמות.
-
-**Response:**
-```json
-[
-  {
-    "id": 1,
-    "name": "מדעים",
-    "description": "מגמת מדעים",
-    "isActive": true
-  }
-]
-```
-
-**Permissions:** `tracks:read` or `page:students:view`
-
----
-
-### POST /api/tracks
-
-יצירת מגמה חדשה.
-
-**Request:**
-```json
-{
-  "name": "מדעים",
-  "description": "מגמת מדעים"
-}
-```
-
-**Permissions:** `tracks:create` or `page:students:edit`
-
----
-
-## Classes
-
-### GET /api/classes
-
-קבלת רשימת כיתות.
-
-**Query Parameters:**
-- `academicYear` - שנת לימודים
-- `grade` - כיתה
-- `isActive` - true/false
-
-**Response:**
-```json
-[
-  {
-    "id": 1,
-    "grade": "י'",
-    "parallel": "1",
-    "track": "מדעים",
-    "academicYear": 2025,
-    "isActive": true
-  }
-]
-```
-
-**Permissions:** `classes:read` or `page:students:view`
-
----
-
-### POST /api/classes
-
-יצירת כיתה חדשה.
-
-**Request:**
-```json
-{
-  "grade": "י'",
-  "parallel": "1",
-  "track": "מדעים",
-  "academicYear": 2025
-}
-```
-
-**Permissions:** `classes:create` or `page:students:edit`
+**Response:** `{ "cohort": 2023, "startYear": 2023 }`
 
 ---
 
 ## Permissions
 
 ### GET /api/permissions/pages
-
-קבלת רשימת כל הדפים וההרשאות.
-
-**Response:**
-```json
-[
-  {
-    "page": "students",
-    "displayName": "Students",
-    "displayNameHebrew": "תלמידים",
-    "category": "academic",
-    "viewAPIs": ["students:read", ...],
-    "editAPIs": ["students:create", ...]
-  }
-]
-```
+Get all pages and permissions.
 
 **Permissions:** Authenticated
-
----
 
 ### GET /api/permissions/my-page-permissions
-
-קבלת הרשאות הדפים של המשתמש הנוכחי.
-
-**Response:**
-```json
-{
-  "students": {
-    "view": true,
-    "edit": true
-  },
-  "soc": {
-    "view": true,
-    "edit": false
-  }
-}
-```
+Get current user's page permissions.
 
 **Permissions:** Authenticated
 
----
-
 ### POST /api/permissions/users/:userId/grant-page
+Grant page permission to user.
 
-מתן הרשאת דף למשתמש.
-
-**Request:**
-```json
-{
-  "page": "students",
-  "action": "view"
-}
-```
+**Request:** `{ "page": "students", "action": "view" }`
 
 **Permissions:** Admin only
 
----
-
 ### POST /api/permissions/users/:userId/revoke-page
+Revoke page permission from user.
 
-הסרת הרשאת דף ממשתמש.
-
-**Request:**
-```json
-{
-  "page": "students",
-  "action": "view"
-}
-```
+**Request:** `{ "page": "students", "action": "view" }`
 
 **Permissions:** Admin only
 
@@ -442,72 +128,19 @@
 ## SOC
 
 ### GET /api/soc/audit-logs
+Get audit logs.
 
-קבלת לוגי ביקורת.
-
-**Query Parameters:**
-- `userId` - סינון לפי משתמש
-- `action` - סינון לפי פעולה
-- `resource` - סינון לפי משאב
-- `status` - SUCCESS, FAILURE
-- `startDate`, `endDate` - טווח תאריכים
-- `limit`, `offset` - pagination
-
-**Response:**
-```json
-{
-  "logs": [
-    {
-      "id": 1,
-      "userId": 1,
-      "action": "CREATE",
-      "resource": "STUDENT",
-      "status": "SUCCESS",
-      "ipAddress": "127.0.0.1",
-      "createdAt": "2024-01-01T00:00:00Z"
-    }
-  ],
-  "total": 100,
-  "limit": 50,
-  "offset": 0
-}
-```
+**Query:** `userId`, `action`, `resource`, `status`, `startDate`, `endDate`, `limit`, `offset`
 
 **Permissions:** `soc:read` or `page:soc:view`
-
----
 
 ### GET /api/soc/stats
-
-קבלת סטטיסטיקות אבטחה.
-
-**Response:**
-```json
-{
-  "totalLogs": 1000,
-  "successLogs": 950,
-  "failureLogs": 50,
-  "uniqueUsers": 10,
-  "uniqueIPs": 5
-}
-```
+Get security statistics.
 
 **Permissions:** `soc:read` or `page:soc:view`
 
----
-
 ### PUT /api/soc/incidents/:id
-
-עדכון אירוע אבטחה.
-
-**Request:**
-```json
-{
-  "incidentStatus": "RESOLVED",
-  "priority": "HIGH",
-  "analystNotes": "Resolved issue"
-}
-```
+Update security incident.
 
 **Permissions:** `soc:update` or `page:soc:edit`
 
@@ -516,79 +149,21 @@
 ## API Keys
 
 ### GET /api/api-keys
-
-קבלת מפתחות API של המשתמש.
-
-**Response:**
-```json
-[
-  {
-    "id": 1,
-    "name": "My API Key",
-    "lastUsedAt": "2024-01-01T00:00:00Z",
-    "isActive": true,
-    "createdAt": "2024-01-01T00:00:00Z"
-  }
-]
-```
+Get user's API keys.
 
 **Permissions:** Authenticated
 
----
-
 ### POST /api/api-keys
+Create API key.
 
-יצירת מפתח API חדש.
-
-**Request:**
-```json
-{
-  "name": "My API Key"
-}
-```
-
-**Response:**
-```json
-{
-  "id": 1,
-  "key": "api-key-here",
-  "name": "My API Key"
-}
-```
+**Request:** `{ "name": "My API Key" }`
 
 **Permissions:** `api-keys:create` or `page:api-keys:edit`
 
----
-
 ### DELETE /api/api-keys/:id
+Revoke API key.
 
-ביטול מפתח API.
-
-**Permissions:** Authenticated (own keys) or Admin (all keys)
-
----
-
-## Search
-
-### GET /api/search/pages
-
-חיפוש דפים.
-
-**Query Parameters:**
-- `q` - שאילתת חיפוש
-
-**Response:**
-```json
-[
-  {
-    "page": "students",
-    "displayName": "Students",
-    "displayNameHebrew": "תלמידים"
-  }
-]
-```
-
-**Permissions:** Authenticated
+**Permissions:** Authenticated (own keys) or Admin
 
 ---
 
@@ -596,21 +171,22 @@
 
 ### Authentication
 
-כל ה-API endpoints (חוץ מ-public) דורשים authentication:
-
-```bash
-# Add Authorization header
+All endpoints (except public) require:
+```
 Authorization: Bearer <jwt-token>
 ```
 
-### Error Responses
+Or:
+```
+X-API-Key: sk_<api-key>
+```
+
+### Error Response
 
 ```json
 {
   "error": "Error message",
-  "details": {
-    "field": "error message"
-  }
+  "details": { "field": "error message" }
 }
 ```
 
@@ -625,18 +201,12 @@ Authorization: Bearer <jwt-token>
 }
 ```
 
-### Permissions
+---
 
-כל endpoint דורש permission מתאים:
+## Permissions
+
+Every endpoint requires appropriate permission:
 - `resource:action` - API permission
 - `page:resource:action` - Page permission
 
----
-
-## סיכום
-
-מדריך זה מכסה את כל ה-API endpoints העיקריים. למידע נוסף:
-
-- [Backend Development Guide](./BACKEND_DEVELOPMENT.md)
-- [Permissions System](./PERMISSIONS_SYSTEM.md)
-- [Architecture Guide](./ARCHITECTURE.md)
+Admins have full access automatically.

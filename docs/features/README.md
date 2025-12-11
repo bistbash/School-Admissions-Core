@@ -1,51 +1,33 @@
 # Features Documentation
 
-תיעוד תכונות המערכת.
+System features documentation.
 
-## 📋 קבצים
+---
 
-- **[ADMIN_SYSTEM.md](./ADMIN_SYSTEM.md)** - מערכת ניהול מנהלים
-  - איך המשתמש הראשון הופך ל-admin
-  - הרשאות admin
-  - Protected endpoints
+## Files
 
-- **[PERMISSIONS_SYSTEM.md](./PERMISSIONS_SYSTEM.md)** - מערכת הרשאות
-  - Page-based permissions
-  - API permissions
-  - Role and user permissions
+- **[ADMIN_SYSTEM.md](./ADMIN_SYSTEM.md)** - Admin system
+- **[PERMISSIONS_SYSTEM.md](./PERMISSIONS_SYSTEM.md)** - Permissions system
+- **[AUDIT_LOGGING.md](./AUDIT_LOGGING.md)** - Audit logging and SOC
+- **[COHORTS_API.md](./COHORTS_API.md)** - Cohorts API
 
-- **[COHORTS_API.md](./COHORTS_API.md)** - API למחזורים
-  - כל ה-endpoints למחזורים
-  - דוגמאות שימוש
-  - Validation rules
+---
 
-- **[AUDIT_LOGGING.md](./AUDIT_LOGGING.md)** - מערכת לוגים ואבטחה
-  - Audit logging
-  - SOC API
-  - Security monitoring
-
-## 🚀 שימוש מהיר
+## Quick Reference
 
 ### Admin System
 ```typescript
-// בדיקה אם משתמש הוא admin
 const user = await apiClient.get('/auth/me');
-if (user.data.isAdmin) {
-  // Admin features
-}
+if (user.data.isAdmin) { /* admin features */ }
 ```
 
 ### Permissions
 ```typescript
-// בדיקת הרשאות
 const { hasPagePermission } = usePermissions();
-if (hasPagePermission('students', 'view')) {
-  // Show students page
-}
+if (hasPagePermission('students', 'view')) { /* show page */ }
 ```
 
-### Cohorts API
+### Cohorts
 ```typescript
-// קבלת כל המחזורים
 const cohorts = await apiClient.get('/cohorts?isActive=true');
 ```

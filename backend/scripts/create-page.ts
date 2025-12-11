@@ -57,6 +57,35 @@ const rl = readline.createInterface({
   output: process.stdout,
 });
 
+// ASCII Art Banner
+const BANNER = `
+╔══════════════════════════════════════════════════════════╗
+║                                                          ║
+║              📄 Page Generator Tool                     ║
+║                                                          ║
+╚══════════════════════════════════════════════════════════╝
+`;
+
+// Colors
+const GREEN = '\x1b[32m';
+const CYAN = '\x1b[36m';
+const BLUE = '\x1b[34m';
+const YELLOW = '\x1b[33m';
+const RESET = '\x1b[0m';
+const BOLD = '\x1b[1m';
+
+function printSuccess(msg: string) {
+  console.log(`${GREEN}✅ ${msg}${RESET}`);
+}
+
+function printInfo(msg: string) {
+  console.log(`${CYAN}ℹ️  ${msg}${RESET}`);
+}
+
+function printHeader(msg: string) {
+  console.log(`${BOLD}${BLUE}${msg}${RESET}`);
+}
+
 function question(query: string): Promise<string> {
   return new Promise((resolve) => {
     rl.question(query, resolve);
@@ -64,8 +93,11 @@ function question(query: string): Promise<string> {
 }
 
 async function collectPageInfo(): Promise<PageConfig> {
-  console.log('\n🎨 יצירת דף חדש במערכת\n');
-  console.log('אנא מלא את הפרטים הבאים:\n');
+  console.log(BANNER);
+  printHeader('Creating a new page in the system');
+  console.log('');
+  printInfo('Please fill in the following details:');
+  console.log('');
 
   const name = await question('שם הדף (באנגלית, עם מקפים, לדוגמה: my-page): ');
   if (!name || !/^[a-z0-9-]+$/.test(name)) {
