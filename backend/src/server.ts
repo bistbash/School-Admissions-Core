@@ -1,4 +1,5 @@
 import express from 'express';
+import { createServer } from 'http';
 import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
@@ -43,6 +44,7 @@ try {
 }
 
 const app = express();
+const httpServer = createServer(app);
 const PORT = process.env.PORT || 3000;
 const isProduction = process.env.NODE_ENV === 'production';
 
@@ -193,6 +195,74 @@ app.use(errorHandler);
 // Start metrics logging
 startMetricsLogging();
 
+// Initialize WebSocket server for real-time SOC monitoring
+// This runs asynchronously and doesn't block server startup
+(async () => {
+  try {
+    const { initializeSOCWebSocket } = await import('./lib/soc/soc-websocket');
+    initializeSOCWebSocket(httpServer);
+    logger.info('SOC WebSocket server initialized');
+  } catch (error: any) {
+    logger.warn({ error: error.message }, 'Failed to initialize SOC WebSocket server (non-critical)');
+  }
+})();
+
+// Scheduled task: Cleanup old pinned audit logs (daily at 2 AM)
+// This runs asynchronously and doesn't block server startup
+(async () => {
+  try {
+    const cron = await import('node-cron');
+    const { prisma } = await import('./lib/database/prisma');
+    
+    // Run daily at 2 AM
+    cron.schedule('0 2 * * *', async () => {
+      try {
+        const oneWeekAgo = new Date();
+        oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+
+        // Unpin logs that were pinned more than a week ago
+        const result = await prisma.auditLog.updateMany({
+          where: {
+            isPinned: true,
+            pinnedAt: {
+              lt: oneWeekAgo,
+            },
+          },
+          data: {
+            isPinned: false,
+            pinnedAt: null,
+            pinnedBy: null,
+          },
+        });
+
+        logger.info({ 
+          unpinnedCount: result.count 
+        }, 'Cleaned up old pinned audit logs');
+      } catch (error: any) {
+        logger.error({ 
+          error: error.message 
+        }, 'Failed to cleanup old pinned audit logs');
+      }
+    });
+    
+    logger.info('Scheduled task for cleanup old pinned audit logs initialized');
+  } catch (error: any) {
+    logger.warn({ error: error.message }, 'Failed to initialize scheduled task for cleanup old pinned audit logs (non-critical)');
+  }
+})();
+
+// Start anomaly detection monitoring
+// This runs asynchronously and doesn't block server startup
+(async () => {
+  try {
+    const { anomalyDetectionService } = await import('./lib/soc/anomaly-detection');
+    await anomalyDetectionService.startContinuousMonitoring(5); // Check every 5 minutes
+    logger.info('Anomaly detection monitoring started');
+  } catch (error: any) {
+    logger.warn({ error: error.message }, 'Failed to start anomaly detection monitoring (non-critical)');
+  }
+})();
+
 // Initialize cohorts on server startup - ensure all cohorts from 1973 to current year + 1 exist
 // This runs asynchronously and doesn't block server startup
 (async () => {
@@ -268,13 +338,28 @@ if (process.env.NODE_ENV !== 'production' && process.env.AUTO_SEED === 'true') {
 }
 
 // Graceful shutdown handler
-let server: any;
 const gracefulShutdown = async (signal: string) => {
   logger.info({ signal }, 'Received shutdown signal, starting graceful shutdown...');
   
+  // Stop anomaly detection monitoring
+  try {
+    const { anomalyDetectionService } = await import('./lib/soc/anomaly-detection');
+    anomalyDetectionService.stopContinuousMonitoring();
+  } catch (error) {
+    // Ignore errors during shutdown
+  }
+
+  // Close WebSocket server
+  try {
+    const { closeSOCWebSocket } = await import('./lib/soc/soc-websocket');
+    closeSOCWebSocket();
+  } catch (error) {
+    // Ignore errors during shutdown
+  }
+  
   // Stop accepting new requests
-  if (server) {
-    server.close(() => {
+  if (httpServer) {
+    httpServer.close(() => {
       logger.info('HTTP server closed');
     });
   }
@@ -311,7 +396,7 @@ process.on('unhandledRejection', (reason: any, promise: Promise<any>) => {
 });
 
 // Start server
-server = app.listen(PORT, () => {
+httpServer.listen(PORT, () => {
   logger.info({
     port: PORT,
     environment: process.env.NODE_ENV || 'development',

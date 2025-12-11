@@ -108,11 +108,19 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
 
     // Fall back to JWT token
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      // Log unauthorized access attempt
-      await auditFromRequest(req, 'AUTH_FAILED', 'AUTH', {
-        status: 'FAILURE',
-        errorMessage: 'No token or API key provided',
-      });
+      // Only log if auditMiddleware hasn't already logged this request
+      if (!(req as any).__auditLogged) {
+        await auditFromRequest(req, 'AUTH_FAILED', 'AUTH', {
+          status: 'FAILURE',
+          errorMessage: 'No token or API key provided',
+          details: {
+            endpoint: req.path || req.url?.split('?')[0] || '',
+            method: req.method,
+            authType: 'NONE',
+            reason: 'No authentication headers found',
+          },
+        }).catch(console.error);
+      }
       throw new UnauthorizedError('No token or API key provided');
     }
 
@@ -126,10 +134,19 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
   } catch (error) {
     // Log authentication failure
     if (error instanceof UnauthorizedError) {
-      await auditFromRequest(req, 'AUTH_FAILED', 'AUTH', {
-        status: 'FAILURE',
-        errorMessage: error.message,
-      }).catch(console.error);
+      // Only log if auditMiddleware hasn't already logged this request
+      if (!(req as any).__auditLogged) {
+        await auditFromRequest(req, 'AUTH_FAILED', 'AUTH', {
+          status: 'FAILURE',
+          errorMessage: error.message,
+          details: {
+            endpoint: req.path || req.url?.split('?')[0] || '',
+            method: req.method,
+            authType: 'JWT',
+            reason: 'Token verification failed',
+          },
+        }).catch(console.error);
+      }
     }
     next(error);
   }

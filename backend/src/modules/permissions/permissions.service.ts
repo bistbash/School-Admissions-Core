@@ -1,6 +1,7 @@
 import { prisma } from '../../lib/database/prisma';
 import { NotFoundError, ValidationError, ConflictError } from '../../lib/utils/errors';
 import { PAGE_PERMISSIONS, getAPIPermissionsForPage } from '../../lib/permissions/permission-registry';
+import { PERMISSION_PRESETS, getPreset } from '../../lib/permissions/permission-presets';
 
 export interface CreatePermissionData {
   name: string;
@@ -1346,5 +1347,89 @@ export class PermissionsService {
       }
     }
     return results;
+  }
+
+  /**
+   * Apply permission preset to user
+   */
+  async applyPresetToUser(userId: number, presetId: string, grantedBy: number) {
+    const preset = getPreset(presetId);
+    if (!preset) {
+      throw new NotFoundError(`Preset "${presetId}" not found`);
+    }
+
+    return this.bulkGrantPagePermissionsToUser(userId, preset.permissions, grantedBy);
+  }
+
+  /**
+   * Apply permission preset to role
+   */
+  async applyPresetToRole(roleId: number, presetId: string, grantedBy: number) {
+    const preset = getPreset(presetId);
+    if (!preset) {
+      throw new NotFoundError(`Preset "${presetId}" not found`);
+    }
+
+    return this.bulkGrantPagePermissionsToRole(roleId, preset.permissions, grantedBy);
+  }
+
+  /**
+   * Copy permissions from one user to another
+   */
+  async copyPermissionsFromUser(sourceUserId: number, targetUserId: number, grantedBy: number) {
+    const sourcePermissions = await this.getUserPagePermissions(sourceUserId);
+    
+    const permissions: Array<{ page: string; action: 'view' | 'edit' }> = [];
+    
+    for (const [page, perms] of Object.entries(sourcePermissions)) {
+      if (perms.view) {
+        permissions.push({ page, action: 'view' });
+      }
+      if (perms.edit) {
+        permissions.push({ page, action: 'edit' });
+      }
+    }
+
+    return this.bulkGrantPagePermissionsToUser(targetUserId, permissions, grantedBy);
+  }
+
+  /**
+   * Copy permissions from role to user
+   */
+  async copyPermissionsFromRoleToUser(roleId: number, userId: number, grantedBy: number) {
+    const rolePermissions = await this.getRolePagePermissions(roleId);
+    
+    const permissions: Array<{ page: string; action: 'view' | 'edit' }> = [];
+    
+    for (const [page, perms] of Object.entries(rolePermissions)) {
+      if (perms.view) {
+        permissions.push({ page, action: 'view' });
+      }
+      if (perms.edit) {
+        permissions.push({ page, action: 'edit' });
+      }
+    }
+
+    return this.bulkGrantPagePermissionsToUser(userId, permissions, grantedBy);
+  }
+
+  /**
+   * Copy permissions from one role to another
+   */
+  async copyPermissionsFromRole(sourceRoleId: number, targetRoleId: number, grantedBy: number) {
+    const sourcePermissions = await this.getRolePagePermissions(sourceRoleId);
+    
+    const permissions: Array<{ page: string; action: 'view' | 'edit' }> = [];
+    
+    for (const [page, perms] of Object.entries(sourcePermissions)) {
+      if (perms.view) {
+        permissions.push({ page, action: 'view' });
+      }
+      if (perms.edit) {
+        permissions.push({ page, action: 'edit' });
+      }
+    }
+
+    return this.bulkGrantPagePermissionsToRole(targetRoleId, permissions, grantedBy);
   }
 }

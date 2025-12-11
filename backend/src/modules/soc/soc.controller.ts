@@ -29,6 +29,10 @@ export class SOCController {
         startDate: req.query.startDate ? new Date(req.query.startDate as string) : undefined,
         endDate: req.query.endDate ? new Date(req.query.endDate as string) : undefined,
         ipAddress: req.query.ipAddress as string | undefined,
+        apiKeyId: req.query.apiKeyId ? Number(req.query.apiKeyId) : undefined,
+        apiKeyOwnerId: req.query.apiKeyOwnerId ? Number(req.query.apiKeyOwnerId) : undefined,
+        authMethod: req.query.authMethod as 'API_KEY' | 'JWT' | 'UNAUTHENTICATED' | undefined,
+        correlationId: req.query.correlationId as string | undefined,
         limit: req.query.limit ? Number(req.query.limit) : 100,
         offset: req.query.offset ? Number(req.query.offset) : 0,
       };
@@ -54,15 +58,28 @@ export class SOCController {
         correlationId,
       }, 'SOC analyst queried audit logs');
 
-      res.json(result);
-    } catch (error) {
+      // Ensure we always return the correct format
+      res.json({
+        logs: result.logs || [],
+        total: result.total || 0,
+        limit: result.limit || filter.limit || 100,
+        offset: result.offset || filter.offset || 0,
+      });
+    } catch (error: any) {
       logger.error({
         type: 'soc_error',
         operation: 'get_audit_logs',
-        error: (error as Error).message,
+        error: error?.message || String(error),
+        stack: error?.stack,
         correlationId,
-      }, 'Error querying audit logs');
-      next(error);
+      }, 'Error retrieving audit logs');
+      
+      // Return error response instead of throwing
+      res.status(500).json({
+        error: 'Failed to retrieve audit logs',
+        message: error?.message || 'Unknown error',
+        correlationId,
+      });
     }
   }
 
@@ -143,7 +160,8 @@ export class SOCController {
     try {
       const limit = req.query.limit ? Number(req.query.limit) : 100;
       const incidents = await socService.getOpenIncidents(limit);
-      res.json(incidents);
+      // Return in same format as audit logs for consistency
+      res.json({ logs: incidents, total: incidents.length, limit });
     } catch (error) {
       next(error);
     }
@@ -548,6 +566,256 @@ export class SOCController {
         error: (error as Error).message,
         correlationId,
       }, 'Error retrieving SOC metrics');
+      next(error);
+    }
+  }
+
+  /**
+   * Bulk mark incidents as false positive
+   * POST /api/soc/incidents/bulk-false-positive
+   */
+  async bulkMarkFalsePositive(req: Request, res: Response, next: NextFunction) {
+    const correlationId = getCorrelationId();
+    const user = (req as any).user;
+    
+    try {
+      const { incidentIds } = req.body;
+      
+      if (!Array.isArray(incidentIds) || incidentIds.length === 0) {
+        return res.status(400).json({ error: 'incidentIds array is required' });
+      }
+
+      const result = await socService.bulkMarkAsFalsePositive(incidentIds, user?.userId);
+
+      logger.info({
+        type: 'soc_action',
+        operation: 'bulk_mark_false_positive',
+        analystId: user?.userId,
+        count: result.count,
+        correlationId,
+      }, `SOC analyst ${user?.userId} marked ${result.count} incidents as false positive`);
+
+      res.json(result);
+    } catch (error) {
+      logger.error({
+        type: 'soc_error',
+        operation: 'bulk_mark_false_positive',
+        error: (error as Error).message,
+        correlationId,
+      }, 'Error bulk marking incidents as false positive');
+      next(error);
+    }
+  }
+
+  /**
+   * Cleanup old false positive incidents
+   * POST /api/soc/incidents/cleanup
+   */
+  async cleanupOldIncidents(req: Request, res: Response, next: NextFunction) {
+    const correlationId = getCorrelationId();
+    const user = (req as any).user;
+    
+    try {
+      const daysOld = req.body.daysOld ? Number(req.body.daysOld) : 7;
+      const result = await socService.cleanupOldFalsePositives(daysOld, user?.userId);
+
+      logger.info({
+        type: 'soc_action',
+        operation: 'cleanup_old_incidents',
+        analystId: user?.userId,
+        daysOld,
+        count: result.count,
+        correlationId,
+      }, `SOC analyst ${user?.userId} cleaned up ${result.count} old incidents`);
+
+      res.json(result);
+    } catch (error) {
+      logger.error({
+        type: 'soc_error',
+        operation: 'cleanup_old_incidents',
+        error: (error as Error).message,
+        correlationId,
+      }, 'Error cleaning up old incidents');
+      next(error);
+    }
+  }
+
+  /**
+   * Pin an audit log (mark as important)
+   * POST /api/soc/audit-logs/:id/pin
+   */
+  async pinAuditLog(req: Request, res: Response, next: NextFunction) {
+    try {
+      const logId = parseInt(req.params.id);
+      const user = (req as any).user;
+      
+      if (!user?.userId) {
+        throw new ForbiddenError('Authentication required');
+      }
+
+      const { prisma } = await import('../../lib/database/prisma');
+      const log = await prisma.auditLog.findUnique({
+        where: { id: logId },
+      });
+
+      if (!log) {
+        throw new NotFoundError('Audit log not found');
+      }
+
+      // Pin the log
+      const updatedLog = await prisma.auditLog.update({
+        where: { id: logId },
+        data: {
+          isPinned: true,
+          pinnedAt: new Date(),
+          pinnedBy: user.userId,
+        },
+      });
+
+      // Invalidate cache to ensure fresh data
+      const { invalidateSOCCache } = await import('../../lib/soc/soc-cache');
+      invalidateSOCCache();
+
+      // Log the pin action (don't await to avoid blocking response)
+      auditFromRequest(req, 'UPDATE', 'AUDIT_LOG', {
+        status: 'SUCCESS',
+        resourceId: logId,
+        details: {
+          action: 'PIN_AUDIT_LOG',
+          logId,
+        },
+      }).catch(console.error);
+
+      // Return the updated log so frontend can update immediately
+      res.json({ 
+        message: 'Audit log pinned successfully',
+        log: {
+          id: updatedLog.id,
+          isPinned: updatedLog.isPinned,
+          pinnedAt: updatedLog.pinnedAt,
+          pinnedBy: updatedLog.pinnedBy,
+        }
+      });
+    } catch (error: any) {
+      next(error);
+    }
+  }
+
+  /**
+   * Unpin an audit log
+   * POST /api/soc/audit-logs/:id/unpin
+   */
+  async unpinAuditLog(req: Request, res: Response, next: NextFunction) {
+    try {
+      const logId = parseInt(req.params.id);
+      const user = (req as any).user;
+      
+      if (!user?.userId) {
+        throw new ForbiddenError('Authentication required');
+      }
+
+      if (isNaN(logId)) {
+        throw new NotFoundError('Invalid log ID');
+      }
+
+      const { prisma } = await import('../../lib/database/prisma');
+      const log = await prisma.auditLog.findUnique({
+        where: { id: logId },
+      });
+
+      if (!log) {
+        throw new NotFoundError('Audit log not found');
+      }
+
+      // Unpin the log
+      const updatedLog = await prisma.auditLog.update({
+        where: { id: logId },
+        data: {
+          isPinned: false,
+          pinnedAt: null,
+          pinnedBy: null,
+        },
+      });
+
+      // Invalidate cache to ensure fresh data
+      const { invalidateSOCCache } = await import('../../lib/soc/soc-cache');
+      invalidateSOCCache();
+
+      // Log the unpin action (don't await to avoid blocking response)
+      auditFromRequest(req, 'UPDATE', 'AUDIT_LOG', {
+        status: 'SUCCESS',
+        resourceId: logId,
+        details: {
+          action: 'UNPIN_AUDIT_LOG',
+          logId,
+        },
+      }).catch(console.error);
+
+      // Return the updated log so frontend can update immediately
+      res.json({ 
+        message: 'Audit log unpinned successfully',
+        log: {
+          id: updatedLog.id,
+          isPinned: updatedLog.isPinned,
+          pinnedAt: updatedLog.pinnedAt,
+          pinnedBy: updatedLog.pinnedBy,
+        }
+      });
+    } catch (error: any) {
+      logger.error({
+        type: 'soc_error',
+        operation: 'unpin_audit_log',
+        error: error?.message || String(error),
+        logId: req.params.id,
+      }, 'Error unpinning audit log');
+      next(error);
+    }
+  }
+
+  /**
+   * Cleanup old pinned logs (remove pins older than 7 days)
+   * POST /api/soc/audit-logs/cleanup-pins
+   */
+  async cleanupOldPins(req: Request, res: Response, next: NextFunction) {
+    try {
+      const user = (req as any).user;
+      
+      if (!user?.userId) {
+        throw new ForbiddenError('Authentication required');
+      }
+
+      const { prisma } = await import('../../lib/database/prisma');
+      const oneWeekAgo = new Date();
+      oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+
+      // Unpin logs that were pinned more than a week ago
+      const result = await prisma.auditLog.updateMany({
+        where: {
+          isPinned: true,
+          pinnedAt: {
+            lt: oneWeekAgo,
+          },
+        },
+        data: {
+          isPinned: false,
+          pinnedAt: null,
+          pinnedBy: null,
+        },
+      });
+
+      await auditFromRequest(req, 'UPDATE', 'AUDIT_LOG', {
+        status: 'SUCCESS',
+        details: {
+          action: 'CLEANUP_OLD_PINS',
+          unpinnedCount: result.count,
+        },
+      }).catch(console.error);
+
+      res.json({ 
+        message: 'Old pins cleaned up successfully',
+        unpinnedCount: result.count,
+      });
+    } catch (error: any) {
       next(error);
     }
   }

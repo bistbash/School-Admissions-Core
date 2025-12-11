@@ -102,6 +102,10 @@ export class PermissionsController {
         adminUser.userId
       );
 
+      if (!userPermission) {
+        return res.status(500).json({ error: 'Failed to grant permission' });
+      }
+
       await auditFromRequest(req, 'UPDATE', 'PERMISSION', {
         status: 'SUCCESS',
         resourceId: userPermission.id,
@@ -250,7 +254,7 @@ export class PermissionsController {
 
       await auditFromRequest(req, 'UPDATE', 'PERMISSION', {
         status: 'SUCCESS',
-        resourceId: result.pagePermission.id,
+        resourceId: result.pagePermission?.id,
         details: {
           action: 'grant_page_permission',
           userId,
@@ -302,7 +306,7 @@ export class PermissionsController {
 
       await auditFromRequest(req, 'UPDATE', 'PERMISSION', {
         status: 'SUCCESS',
-        resourceId: result.pagePermission.id,
+        resourceId: result.pagePermission?.id,
         details: {
           action: 'revoke_page_permission',
           userId,
@@ -678,6 +682,234 @@ export class PermissionsController {
       await auditFromRequest(req, 'UPDATE', 'PERMISSION', {
         status: 'FAILURE',
         errorMessage: error instanceof Error ? error.message : 'Failed to revoke custom mode permission from role',
+      });
+      next(error);
+    }
+  }
+
+  /**
+   * Get all permission presets
+   */
+  async getPresets(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { getAllPresets } = await import('../../lib/permissions/permission-presets');
+      const presets = getAllPresets();
+      res.json(presets);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Apply permission preset to user (Admin only)
+   */
+  async applyPresetToUser(req: Request, res: Response, next: NextFunction) {
+    try {
+      const adminUser = (req as any).user;
+      const userId = parseInt(req.params.userId);
+      const { presetId } = req.body;
+
+      if (!presetId) {
+        return res.status(400).json({ error: 'Preset ID is required' });
+      }
+
+      const results = await permissionsService.applyPresetToUser(
+        userId,
+        presetId,
+        adminUser.userId
+      );
+
+      await auditFromRequest(req, 'UPDATE', 'PERMISSION', {
+        status: 'SUCCESS',
+        details: {
+          action: 'apply_preset_to_user',
+          userId,
+          presetId,
+          grantedBy: adminUser.userId,
+        },
+      });
+
+      res.json(results);
+    } catch (error) {
+      await auditFromRequest(req, 'UPDATE', 'PERMISSION', {
+        status: 'FAILURE',
+        errorMessage: error instanceof Error ? error.message : 'Failed to apply preset',
+        details: {
+          action: 'apply_preset_to_user',
+          userId: req.params.userId,
+        },
+      });
+      next(error);
+    }
+  }
+
+  /**
+   * Apply permission preset to role (Admin only)
+   */
+  async applyPresetToRole(req: Request, res: Response, next: NextFunction) {
+    try {
+      const adminUser = (req as any).user;
+      const roleId = parseInt(req.params.roleId);
+      const { presetId } = req.body;
+
+      if (!presetId) {
+        return res.status(400).json({ error: 'Preset ID is required' });
+      }
+
+      const results = await permissionsService.applyPresetToRole(
+        roleId,
+        presetId,
+        adminUser.userId
+      );
+
+      await auditFromRequest(req, 'UPDATE', 'PERMISSION', {
+        status: 'SUCCESS',
+        details: {
+          action: 'apply_preset_to_role',
+          roleId,
+          presetId,
+          grantedBy: adminUser.userId,
+        },
+      });
+
+      res.json(results);
+    } catch (error) {
+      await auditFromRequest(req, 'UPDATE', 'PERMISSION', {
+        status: 'FAILURE',
+        errorMessage: error instanceof Error ? error.message : 'Failed to apply preset',
+        details: {
+          action: 'apply_preset_to_role',
+          roleId: req.params.roleId,
+        },
+      });
+      next(error);
+    }
+  }
+
+  /**
+   * Copy permissions from one user to another (Admin only)
+   */
+  async copyPermissionsFromUser(req: Request, res: Response, next: NextFunction) {
+    try {
+      const adminUser = (req as any).user;
+      const targetUserId = parseInt(req.params.userId);
+      const { sourceUserId } = req.body;
+
+      if (!sourceUserId) {
+        return res.status(400).json({ error: 'Source user ID is required' });
+      }
+
+      const results = await permissionsService.copyPermissionsFromUser(
+        sourceUserId,
+        targetUserId,
+        adminUser.userId
+      );
+
+      await auditFromRequest(req, 'UPDATE', 'PERMISSION', {
+        status: 'SUCCESS',
+        details: {
+          action: 'copy_permissions_from_user',
+          sourceUserId,
+          targetUserId,
+          grantedBy: adminUser.userId,
+        },
+      });
+
+      res.json(results);
+    } catch (error) {
+      await auditFromRequest(req, 'UPDATE', 'PERMISSION', {
+        status: 'FAILURE',
+        errorMessage: error instanceof Error ? error.message : 'Failed to copy permissions',
+        details: {
+          action: 'copy_permissions_from_user',
+          userId: req.params.userId,
+        },
+      });
+      next(error);
+    }
+  }
+
+  /**
+   * Copy permissions from role to user (Admin only)
+   */
+  async copyPermissionsFromRoleToUser(req: Request, res: Response, next: NextFunction) {
+    try {
+      const adminUser = (req as any).user;
+      const userId = parseInt(req.params.userId);
+      const { roleId } = req.body;
+
+      if (!roleId) {
+        return res.status(400).json({ error: 'Role ID is required' });
+      }
+
+      const results = await permissionsService.copyPermissionsFromRoleToUser(
+        roleId,
+        userId,
+        adminUser.userId
+      );
+
+      await auditFromRequest(req, 'UPDATE', 'PERMISSION', {
+        status: 'SUCCESS',
+        details: {
+          action: 'copy_permissions_from_role_to_user',
+          roleId,
+          userId,
+          grantedBy: adminUser.userId,
+        },
+      });
+
+      res.json(results);
+    } catch (error) {
+      await auditFromRequest(req, 'UPDATE', 'PERMISSION', {
+        status: 'FAILURE',
+        errorMessage: error instanceof Error ? error.message : 'Failed to copy permissions',
+        details: {
+          action: 'copy_permissions_from_role_to_user',
+          userId: req.params.userId,
+        },
+      });
+      next(error);
+    }
+  }
+
+  /**
+   * Copy permissions from one role to another (Admin only)
+   */
+  async copyPermissionsFromRole(req: Request, res: Response, next: NextFunction) {
+    try {
+      const adminUser = (req as any).user;
+      const targetRoleId = parseInt(req.params.roleId);
+      const { sourceRoleId } = req.body;
+
+      if (!sourceRoleId) {
+        return res.status(400).json({ error: 'Source role ID is required' });
+      }
+
+      const results = await permissionsService.copyPermissionsFromRole(
+        sourceRoleId,
+        targetRoleId,
+        adminUser.userId
+      );
+
+      await auditFromRequest(req, 'UPDATE', 'PERMISSION', {
+        status: 'SUCCESS',
+        details: {
+          action: 'copy_permissions_from_role',
+          sourceRoleId,
+          targetRoleId,
+          grantedBy: adminUser.userId,
+        },
+      });
+
+      res.json(results);
+    } catch (error) {
+      await auditFromRequest(req, 'UPDATE', 'PERMISSION', {
+        status: 'FAILURE',
+        errorMessage: error instanceof Error ? error.message : 'Failed to copy permissions',
+        details: {
+          action: 'copy_permissions_from_role',
+          roleId: req.params.roleId,
+        },
       });
       next(error);
     }

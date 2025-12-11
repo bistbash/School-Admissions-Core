@@ -28,11 +28,12 @@ export class APIKeysController {
       const result = await apiKeysService.create(validated, user.userId);
       
       // Log creation (without the key itself)
+      // This will be auto-pinned as it's an important operation
       const { auditFromRequest } = await import('../../lib/audit');
-      await auditFromRequest(req, 'CREATE', 'AUDIT_LOG', {
+      await auditFromRequest(req, 'CREATE', 'API_KEY', {
         status: 'SUCCESS',
+        resourceId: result.id,
         details: {
-          resource: 'API_KEY',
           apiKeyId: result.id,
           apiKeyName: result.name,
           // NEVER log the actual key

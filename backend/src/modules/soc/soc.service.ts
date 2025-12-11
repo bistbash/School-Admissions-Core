@@ -2,6 +2,8 @@ import { prisma } from '../../lib/database/prisma';
 import { AuditAction, AuditResource, AuditStatus } from '../../lib/audit/audit';
 import { socCache, getAuditLogsCacheKey, getStatsCacheKey, invalidateSOCCache } from '../../lib/soc/soc-cache';
 import { retryPrismaOperation } from '../../lib/database/prisma-retry';
+import { emitAuditLogUpdate, emitIncidentUpdate } from '../../lib/soc/soc-websocket';
+import { logger } from '../../lib/utils/logger';
 
 export interface AuditLogFilter {
   userId?: number;
@@ -16,6 +18,10 @@ export interface AuditLogFilter {
   startDate?: Date;
   endDate?: Date;
   ipAddress?: string;
+  apiKeyId?: number; // Filter by API key ID
+  apiKeyOwnerId?: number; // Filter by API key owner (user who created the API key)
+  authMethod?: 'API_KEY' | 'JWT' | 'UNAUTHENTICATED'; // Filter by authentication method
+  correlationId?: string; // Filter by correlation ID
   limit?: number;
   offset?: number;
 }
@@ -55,106 +61,294 @@ export class SOCService {
       }
     }
 
-    const where: any = {};
+    // Build where clause step by step - use AND array from the start to avoid conflicts
+    const whereConditions: any[] = [];
+    const directWhere: any = {};
 
     if (filter.userId) {
-      where.userId = filter.userId;
+      directWhere.userId = filter.userId;
     }
 
     if (filter.userEmail) {
-      where.userEmail = { contains: filter.userEmail, mode: 'insensitive' };
+      // SQLite doesn't support case-insensitive mode
+      directWhere.userEmail = { contains: filter.userEmail };
     }
 
     if (filter.action) {
       if (Array.isArray(filter.action)) {
-        where.action = { in: filter.action };
+        directWhere.action = { in: filter.action };
       } else {
-        where.action = filter.action;
+        directWhere.action = filter.action;
       }
     }
 
     if (filter.resource) {
       if (Array.isArray(filter.resource)) {
-        where.resource = { in: filter.resource };
+        directWhere.resource = { in: filter.resource };
       } else {
-        where.resource = filter.resource;
+        directWhere.resource = filter.resource;
       }
     }
 
     if (filter.resourceId !== undefined) {
-      where.resourceId = filter.resourceId;
+      directWhere.resourceId = filter.resourceId;
     }
 
     if (filter.status) {
       if (Array.isArray(filter.status)) {
-        where.status = { in: filter.status };
+        directWhere.status = { in: filter.status };
       } else {
-        where.status = filter.status;
+        directWhere.status = filter.status;
       }
     }
 
     if (filter.incidentStatus) {
       if (Array.isArray(filter.incidentStatus)) {
-        where.incidentStatus = { in: filter.incidentStatus };
+        directWhere.incidentStatus = { in: filter.incidentStatus };
       } else {
-        where.incidentStatus = filter.incidentStatus;
+        directWhere.incidentStatus = filter.incidentStatus;
       }
     }
 
     if (filter.priority) {
       if (Array.isArray(filter.priority)) {
-        where.priority = { in: filter.priority };
+        directWhere.priority = { in: filter.priority };
       } else {
-        where.priority = filter.priority;
+        directWhere.priority = filter.priority;
       }
     }
 
     if (filter.assignedTo !== undefined) {
-      where.assignedTo = filter.assignedTo;
+      directWhere.assignedTo = filter.assignedTo;
     }
 
     if (filter.startDate || filter.endDate) {
-      where.createdAt = {};
+      directWhere.createdAt = {};
       if (filter.startDate) {
-        where.createdAt.gte = filter.startDate;
+        directWhere.createdAt.gte = filter.startDate;
       }
       if (filter.endDate) {
-        where.createdAt.lte = filter.endDate;
+        directWhere.createdAt.lte = filter.endDate;
       }
     }
 
     if (filter.ipAddress) {
-      where.ipAddress = { contains: filter.ipAddress };
+      directWhere.ipAddress = { contains: filter.ipAddress };
     }
 
-    const logs = await retryPrismaOperation(() =>
-      prisma.auditLog.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        take: filter.limit || 100,
-        skip: filter.offset || 0,
-      })
-    );
-
-    const total = await retryPrismaOperation(() => prisma.auditLog.count({ where }));
-
-    const result = {
-      logs: logs.map(log => ({
-        ...log,
-        details: log.details ? JSON.parse(log.details) : null,
-      })),
-      total,
-      limit: filter.limit || 100,
-      offset: filter.offset || 0,
-    };
-
-    // Cache result if it's a small query
-    if (!filter.limit || filter.limit <= 100) {
-      const cacheKey = getAuditLogsCacheKey(filter);
-      socCache.set(cacheKey, result, 2 * 60 * 1000); // 2 minutes TTL
+    if (filter.apiKeyId) {
+      directWhere.apiKeyId = filter.apiKeyId;
     }
 
-    return result;
+    // Complex conditions that need AND array
+    if (filter.apiKeyOwnerId) {
+      // Filter by API key owner - need to join with ApiKey table
+      whereConditions.push({
+        apiKey: {
+          userId: filter.apiKeyOwnerId,
+        },
+      });
+    }
+
+    if (filter.authMethod) {
+      // Filter by authentication method
+      if (filter.authMethod === 'API_KEY') {
+        if (!filter.apiKeyId) {
+          // Only set if apiKeyId filter is not already specified
+          whereConditions.push({ apiKeyId: { not: null } });
+        }
+      } else if (filter.authMethod === 'JWT') {
+        // JWT: has userId but no apiKeyId
+        whereConditions.push({ apiKeyId: null });
+        whereConditions.push({ userId: { not: null } });
+      } else if (filter.authMethod === 'UNAUTHENTICATED') {
+        // UNAUTHENTICATED: no userId and no apiKeyId
+        whereConditions.push({ apiKeyId: null });
+        whereConditions.push({ userId: null });
+      }
+    }
+
+    if (filter.correlationId) {
+      // Filter by correlation ID in details JSON
+      // details is a String field containing JSON, so we use contains for string search
+      whereConditions.push({
+        details: {
+          contains: `"correlationId":"${filter.correlationId}"`,
+        },
+      });
+    }
+
+    // Default to showing more logs if no limit specified (for SOC visibility)
+    const limit = filter.limit || 100;
+    const offset = filter.offset || 0;
+    
+    // Build final where clause - combine direct conditions with AND array
+    let finalWhere: any = { ...directWhere };
+    
+    // Add AND conditions if we have any
+    if (whereConditions.length > 0) {
+      finalWhere.AND = whereConditions;
+    }
+    
+    // If no conditions at all, use empty object (Prisma will return all records)
+    if (Object.keys(finalWhere).length === 0) {
+      finalWhere = {};
+    }
+    
+    try {
+      // Log the exact where clause before query
+      console.log('[DEBUG] Final where clause:', JSON.stringify(finalWhere, null, 2));
+      console.log('[DEBUG] Direct where:', JSON.stringify(directWhere, null, 2));
+      console.log('[DEBUG] Where conditions:', JSON.stringify(whereConditions, null, 2));
+      console.log('[DEBUG] Filter:', JSON.stringify(filter, null, 2));
+      
+      try {
+        logger.debug({
+          where: JSON.stringify(finalWhere),
+          limit,
+          offset,
+          filter: JSON.stringify(filter),
+        }, 'Fetching audit logs');
+      } catch (logError) {
+        // Fallback if logger fails - just continue
+      }
+      
+      // Validate where clause structure before query
+      if (finalWhere.AND && Array.isArray(finalWhere.AND)) {
+        // Check for conflicts: if directWhere has apiKeyId and AND has apiKey condition
+        if (directWhere.apiKeyId && finalWhere.AND.some((cond: any) => cond.apiKey)) {
+          console.error('[ERROR] Conflict detected: directWhere.apiKeyId and AND.apiKey both exist!');
+          throw new Error('Invalid where clause: cannot have both apiKeyId and apiKey conditions');
+        }
+        // Check for conflicts: if directWhere has details and AND has details condition
+        if (directWhere.details && finalWhere.AND.some((cond: any) => cond.details)) {
+          console.error('[ERROR] Conflict detected: directWhere.details and AND.details both exist!');
+          throw new Error('Invalid where clause: cannot have both directWhere.details and AND.details conditions');
+        }
+      }
+      
+                    const logs = await retryPrismaOperation(() =>
+                        prisma.auditLog.findMany({
+                            where: finalWhere as any,
+                            orderBy: [
+                                { isPinned: 'desc' }, // Pinned logs first
+                                { pinnedAt: 'desc' }, // Among pinned, newest pinned first
+                                { createdAt: 'desc' }, // Then by creation date
+                            ],
+                            take: limit,
+                            skip: offset,
+                            include: {
+                                // Include API key info if available
+                                apiKey: true,
+                            },
+                        } as any)
+                    );
+
+      const total = await retryPrismaOperation(() => prisma.auditLog.count({ where: finalWhere as any }));
+
+      // Enrich logs with user information for API keys
+      const enrichedLogs = await Promise.all(
+        logs.map(async (log: any) => {
+          // Get API key owner (the user who created/owns the API key)
+          let apiKeyOwner = null;
+          const apiKey = log.apiKey as any;
+          if (apiKey?.userId) {
+            apiKeyOwner = await retryPrismaOperation(() =>
+              prisma.soldier.findUnique({
+                where: { id: apiKey.userId },
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                  personalNumber: true,
+                  isAdmin: true,
+                },
+              })
+            );
+          }
+
+          // Get user info if userId exists (the user who made the request)
+          let userInfo = null;
+          if (log.userId) {
+            userInfo = await retryPrismaOperation(() =>
+              prisma.soldier.findUnique({
+                where: { id: log.userId },
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                  personalNumber: true,
+                  isAdmin: true,
+                },
+              })
+            );
+          }
+
+          // Parse details to get auth method - handle errors gracefully
+          let details = null;
+          try {
+            details = log.details ? (typeof log.details === 'string' ? JSON.parse(log.details) : log.details) : null;
+          } catch (error) {
+            // If parsing fails, use empty object
+            details = {};
+          }
+          
+          const authMethod = details?.authMethod || (log.apiKeyId ? 'API_KEY' : (log.userId ? 'JWT' : 'UNAUTHENTICATED'));
+
+          return {
+            ...log,
+            details,
+            authMethod, // How the request was authenticated: API_KEY, JWT, or UNAUTHENTICATED
+            apiKey: apiKey ? {
+              id: apiKey.id,
+              name: apiKey.name,
+              owner: apiKeyOwner, // The user who owns/created this API key
+              userId: apiKey.userId || undefined, // Owner's user ID
+            } : null,
+            user: userInfo, // The user who made the request (if authenticated)
+          };
+        })
+      );
+
+      const result = {
+        logs: enrichedLogs,
+        total,
+        limit: filter.limit || 100,
+        offset: filter.offset || 0,
+      };
+
+      // Cache result if it's a small query
+      if (!filter.limit || filter.limit <= 100) {
+        const cacheKey = getAuditLogsCacheKey(filter);
+        socCache.set(cacheKey, result, 2 * 60 * 1000); // 2 minutes TTL
+      }
+
+      return result;
+    } catch (error: any) {
+      // Log the error with full details for debugging
+      console.error('[ERROR] getAuditLogs failed:', {
+        error: error?.message || String(error),
+        stack: error?.stack,
+        where: JSON.stringify(finalWhere, null, 2),
+        directWhere: JSON.stringify(directWhere, null, 2),
+        whereConditions: JSON.stringify(whereConditions, null, 2),
+        filter: JSON.stringify(filter, null, 2),
+      });
+      
+      try {
+        logger.error({
+          error: error?.message || String(error),
+          stack: error?.stack,
+          where: JSON.stringify(finalWhere),
+          filter: JSON.stringify(filter),
+        }, 'Error in getAuditLogs');
+      } catch (logError) {
+        // Already logged to console above
+      }
+      
+      // Re-throw to be handled by controller
+      throw error;
+    }
   }
 
   /**
@@ -448,6 +642,12 @@ export class SOCService {
     // Invalidate cache when incidents are updated
     invalidateSOCCache();
 
+    // Emit real-time update via WebSocket
+    emitIncidentUpdate({
+      ...updated,
+      details: updated.details ? JSON.parse(updated.details) : null,
+    });
+
     return {
       ...updated,
       details: updated.details ? JSON.parse(updated.details) : null,
@@ -585,5 +785,66 @@ export class SOCService {
   async removeTrustedUser(id: number) {
     const { removeTrustedUser } = await import('../../lib/security/trustedUsers');
     return removeTrustedUser(id);
+  }
+
+  /**
+   * Bulk mark incidents as false positive
+   * Useful for cleaning up incidents created by anomaly detection that were false positives
+   */
+  async bulkMarkAsFalsePositive(incidentIds: number[], resolvedBy?: number) {
+    const updated = await retryPrismaOperation(() =>
+      prisma.auditLog.updateMany({
+        where: {
+          id: { in: incidentIds },
+          incidentStatus: { in: ['NEW', 'INVESTIGATING'] }
+        },
+        data: {
+          incidentStatus: 'FALSE_POSITIVE',
+          resolvedAt: new Date(),
+          resolvedBy: resolvedBy || null,
+        }
+      })
+    );
+
+    // Invalidate cache
+    invalidateSOCCache();
+
+    return { count: updated.count };
+  }
+
+  /**
+   * Clean up old false positive incidents
+   * Marks incidents older than specified days as false positive if they match certain criteria
+   */
+  async cleanupOldFalsePositives(daysOld: number = 7, resolvedBy?: number) {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - daysOld);
+
+    // Find incidents that:
+    // 1. Are older than cutoff date
+    // 2. Are still marked as NEW or INVESTIGATING
+    // 3. Were created by anomaly detection (have anomalyDetected in details)
+    // 4. Are unauthenticated (no userId, no apiKeyId)
+    const oldIncidents = await retryPrismaOperation(() =>
+      prisma.auditLog.findMany({
+        where: {
+          incidentStatus: { in: ['NEW', 'INVESTIGATING'] },
+          createdAt: { lt: cutoffDate },
+          userId: null,
+          apiKeyId: null,
+          details: {
+            contains: 'anomalyDetected'
+          }
+        },
+        select: { id: true }
+      })
+    );
+
+    if (oldIncidents.length === 0) {
+      return { count: 0 };
+    }
+
+    const incidentIds = oldIncidents.map(i => i.id);
+    return this.bulkMarkAsFalsePositive(incidentIds, resolvedBy);
   }
 }

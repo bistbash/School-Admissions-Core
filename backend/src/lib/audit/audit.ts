@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { prisma, getPrismaClient } from '../database/prisma';
 import { JwtPayload } from '../auth/auth';
 import { retryPrismaOperation } from '../database/prisma-retry';
+import { getCorrelationId } from '../utils/logger';
 
 export type AuditAction = 
   | 'LOGIN'
@@ -58,6 +59,8 @@ export interface AuditLogData {
   requestSize?: number; // Request body size in bytes
   responseSize?: number; // Response body size in bytes
   responseTime?: number; // Response time in milliseconds
+  isPinned?: boolean; // Whether this log should be pinned (important operations)
+  pinnedBy?: number; // User ID who pinned it (null for auto-pinned)
 }
 
 /**
@@ -80,37 +83,96 @@ function getUserAgent(req: Request): string | undefined {
 }
 
 /**
- * Get user info from request (if authenticated)
+ * Determine if a log should be auto-pinned based on importance
+ * Important operations:
+ * - API KEY creation
+ * - STUDENT operations (CREATE, UPDATE, DELETE, READ_LIST via API)
+ * - Critical security events
  */
-function getUserInfo(req: Request): { userId?: number; userEmail?: string; apiKeyId?: number } {
+function shouldAutoPinLog(data: AuditLogData): boolean {
+  // Only pin successful operations from this week
+  const oneWeekAgo = new Date();
+  oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+  
+  // API KEY creation is always important
+  if (data.resource === 'API_KEY' && data.action === 'CREATE') {
+    return true;
+  }
+
+  // STUDENT operations via API are important
+  if (data.resource === 'STUDENT') {
+    // All write operations on students
+    if (data.action === 'CREATE' || data.action === 'UPDATE' || data.action === 'DELETE') {
+      return true;
+    }
+    // READ_LIST via API (not via frontend) - check if it's an API call
+    if (data.action === 'READ_LIST' && data.apiKeyId) {
+      return true;
+    }
+  }
+
+  // Critical security events
+  if (data.resource === 'AUTH' || data.resource === 'SECURITY') {
+    if (data.action === 'AUTH_FAILED' && data.priority === 'CRITICAL') {
+      return true;
+    }
+    if (data.action === 'UNAUTHORIZED_ACCESS' && data.priority === 'HIGH') {
+      return true;
+    }
+  }
+
+  // Operations via API key on sensitive resources
+  if (data.apiKeyId && (
+    data.resource === 'SOLDIER' ||
+    data.resource === 'STUDENT' ||
+    data.resource === 'COHORT' ||
+    data.resource === 'PERMISSION'
+  )) {
+    // Any write operation via API
+    if (data.action === 'CREATE' || data.action === 'UPDATE' || data.action === 'DELETE') {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Get user info from request (if authenticated)
+ * Returns info about whether request came from API key or website (JWT)
+ */
+function getUserInfo(req: Request): { 
+  userId?: number; 
+  userEmail?: string; 
+  apiKeyId?: number;
+  authMethod?: 'API_KEY' | 'JWT' | 'UNAUTHENTICATED';
+} {
   const user = (req as any).user as JwtPayload | undefined;
   const apiKey = (req as any).apiKey;
   
+  // Check if request came via API key
+  if (apiKey?.id) {
+    return {
+      userId: apiKey.userId || user?.userId, // API key's owner or user from JWT
+      userEmail: user?.email, // Email from JWT if available
+      apiKeyId: apiKey.id,
+      authMethod: 'API_KEY', // Request came via API key
+    };
+  }
+  
+  // Check if request came via JWT (website)
   if (user) {
     return {
       userId: user.userId,
       userEmail: user.email,
-      apiKeyId: apiKey?.id, // Include API key ID if API key was used
+      authMethod: 'JWT', // Request came via website (JWT token)
     };
   }
   
-  // If API key is used, try to get user info from API key
-  if (apiKey?.userId) {
-    return {
-      userId: apiKey.userId,
-      userEmail: undefined, // API key doesn't have email
-      apiKeyId: apiKey.id,
-    };
-  }
-  
-  // If only API key is used (no user)
-  if (apiKey?.id) {
-    return {
-      apiKeyId: apiKey.id,
-    };
-  }
-  
-  return {};
+  // Unauthenticated request
+  return {
+    authMethod: 'UNAUTHENTICATED',
+  };
 }
 
 /**
@@ -148,15 +210,42 @@ export async function createAuditLog(data: AuditLogData): Promise<void> {
       if (data.responseSize !== undefined) auditData.responseSize = data.responseSize;
       if (data.responseTime !== undefined) auditData.responseTime = data.responseTime;
 
-      await currentPrisma.auditLog.create({
+      // Auto-pin important operations (only for successful operations from this week)
+      const shouldAutoPin = shouldAutoPinLog(data);
+      if (shouldAutoPin && data.status === 'SUCCESS') {
+        auditData.isPinned = true;
+        auditData.pinnedAt = new Date();
+        auditData.pinnedBy = null; // null = auto-pinned
+      } else if (data.isPinned !== undefined) {
+        // Manual pinning
+        auditData.isPinned = data.isPinned;
+        if (data.isPinned) {
+          auditData.pinnedAt = new Date();
+          auditData.pinnedBy = data.pinnedBy;
+        }
+      }
+
+      const created = await currentPrisma.auditLog.create({
         data: auditData,
       });
+      
+      // Log successful creation for debugging (only in development)
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`[AUDIT] Created log: ${created.id} - ${data.action} ${data.resource} - ${data.status}`);
+      }
     }, 3, 200); // 3 retries with exponential backoff starting at 200ms
   } catch (error: any) {
     // Don't throw - audit logging should never break the application
     // Only log if it's not a panic (panics are already logged by retryPrismaOperation)
     if (error?.name !== 'PrismaClientRustPanicError') {
       console.error('Failed to create audit log after retries:', error);
+      console.error('Audit log data that failed:', {
+        action: data.action,
+        resource: data.resource,
+        status: data.status,
+        httpMethod: data.httpMethod,
+        httpPath: data.httpPath,
+      });
     }
   }
 }
@@ -198,16 +287,39 @@ export async function auditFromRequest(
 
 /**
  * Audit logging middleware - logs all requests with comprehensive details
+ * IMPORTANT: This middleware logs ALL HTTP methods (GET, POST, PUT, PATCH, DELETE)
+ * for all API routes to ensure complete audit trail for SOC monitoring
  */
 export function auditMiddleware(req: Request, res: Response, next: NextFunction): void {
-  // Don't log health checks and static assets
-  if (req.path === '/health' || req.path.startsWith('/static') || req.path === '/ready' || req.path === '/live') {
+  // Don't log health checks, static assets, and non-API routes
+  const path = req.path || req.url?.split('?')[0] || '';
+  
+  // Skip logging for specific paths
+  if (
+    path === '/health' || 
+    path === '/ready' || 
+    path === '/live' ||
+    path.startsWith('/static') ||
+    path.startsWith('/_next') ||
+    path.startsWith('/favicon') ||
+    path === '/'
+  ) {
+    return next();
+  }
+  
+  // Only log API routes - this is critical for SOC
+  // Logs ALL methods: GET, POST, PUT, PATCH, DELETE
+  const isAPIRoute = path.startsWith('/api') || path.startsWith('/soc') || path.startsWith('/audit');
+  if (!isAPIRoute) {
     return next();
   }
 
+  // Mark that audit middleware is handling this request to prevent duplicate logs
+  (req as any).__auditLogged = false;
+  
   const startTime = Date.now();
-  const method = req.method.toUpperCase();
-  const path = req.path;
+  const method = req.method.toUpperCase(); // GET, POST, PUT, PATCH, DELETE - ALL methods are logged
+  const actualPath = req.path || req.url?.split('?')[0] || '';
   
   // Calculate request size
   const requestSize = req.headers['content-length'] 
@@ -225,65 +337,133 @@ export function auditMiddleware(req: Request, res: Response, next: NextFunction)
     let resource: AuditResource = 'SYSTEM';
     
     // Determine resource from path
-    if (path.includes('/soldiers')) resource = 'SOLDIER';
-    else if (path.includes('/departments')) resource = 'DEPARTMENT';
-    else if (path.includes('/roles')) resource = 'ROLE';
-    else if (path.includes('/rooms')) resource = 'ROOM';
-    else if (path.includes('/auth')) resource = 'AUTH';
-    else if (path.includes('/audit') || path.includes('/soc')) resource = 'AUDIT_LOG';
-    else if (path.includes('/api-keys')) resource = 'API_KEY';
-    else if (path.includes('/cohorts')) resource = 'COHORT';
-    else if (path.includes('/students')) resource = 'STUDENT';
-    else if (path.includes('/student-exits')) resource = 'STUDENT_EXIT';
-    else if (path.includes('/permissions')) resource = 'PERMISSION';
-    else if (path.includes('/tracks')) resource = 'STUDENT';
-    else if (path.includes('/classes')) resource = 'STUDENT';
-    else if (path.includes('/docs')) resource = 'SYSTEM';
+    if (actualPath.includes('/soldiers')) resource = 'SOLDIER';
+    else if (actualPath.includes('/departments')) resource = 'DEPARTMENT';
+    else if (actualPath.includes('/roles')) resource = 'ROLE';
+    else if (actualPath.includes('/rooms')) resource = 'ROOM';
+    else if (actualPath.includes('/auth')) resource = 'AUTH';
+    else if (actualPath.includes('/audit') || actualPath.includes('/soc')) resource = 'AUDIT_LOG';
+    else if (actualPath.includes('/api-keys')) resource = 'API_KEY';
+    else if (actualPath.includes('/cohorts')) resource = 'COHORT';
+    else if (actualPath.includes('/students')) resource = 'STUDENT';
+    else if (actualPath.includes('/student-exits')) resource = 'STUDENT_EXIT';
+    else if (actualPath.includes('/permissions')) resource = 'PERMISSION';
+    else if (actualPath.includes('/tracks')) resource = 'STUDENT';
+    else if (actualPath.includes('/classes')) resource = 'STUDENT';
+    else if (actualPath.includes('/docs')) resource = 'SYSTEM';
     
     // Determine action from method
+    // IMPORTANT: All HTTP methods (GET, POST, PUT, PATCH, DELETE) are logged
     if (method === 'POST') {
-      if (path.includes('/login')) action = 'LOGIN';
-      else if (path.includes('/register')) action = 'REGISTER';
-      else action = 'CREATE';
+      if (actualPath.includes('/login')) action = 'LOGIN';
+      else if (actualPath.includes('/register')) action = 'REGISTER';
+      else action = 'CREATE'; // All POST requests are logged as CREATE
     } else if (method === 'PUT' || method === 'PATCH') {
-      action = 'UPDATE';
+      action = 'UPDATE'; // All PUT/PATCH requests are logged as UPDATE
     } else if (method === 'DELETE') {
-      action = 'DELETE';
+      action = 'DELETE'; // All DELETE requests are logged as DELETE
     } else if (method === 'GET') {
-      action = path.match(/\/\d+$/) ? 'READ' : 'READ_LIST';
+      action = actualPath.match(/\/\d+$/) ? 'READ' : 'READ_LIST'; // GET requests are logged as READ/READ_LIST
     }
+    // Note: Other methods (HEAD, OPTIONS, etc.) will default to 'READ' action but still be logged
     
     // Determine status from response
     const statusCode = (res as any).statusCode || 200;
     const status: AuditStatus = statusCode >= 400 ? 'FAILURE' : 'SUCCESS';
     
     // Extract resource ID from path if available
-    const resourceIdMatch = path.match(/\/(\d+)(?:\/|$)/);
+    const resourceIdMatch = actualPath.match(/\/(\d+)(?:\/|$)/);
     const resourceId = resourceIdMatch ? parseInt(resourceIdMatch[1]) : undefined;
     
     // Get user info (includes API key ID if used)
     const userInfo = getUserInfo(req);
     
+    // Get correlation ID if available
+    const correlationId = getCorrelationId();
+    
+    // Sanitize headers (remove sensitive data)
+    const sanitizedHeaders: Record<string, string> = {};
+    const sensitiveHeaders = ['authorization', 'x-api-key', 'cookie', 'x-csrf-token'];
+    Object.keys(req.headers).forEach(key => {
+      if (!sensitiveHeaders.includes(key.toLowerCase())) {
+        sanitizedHeaders[key] = String(req.headers[key] || '');
+      } else {
+        sanitizedHeaders[key] = '[REDACTED]';
+      }
+    });
+    
+    // Get API key info if available
+    const apiKey = (req as any).apiKey;
+    const apiKeyInfo = apiKey ? {
+      apiKeyId: apiKey.id,
+      apiKeyName: apiKey.name,
+      apiKeyUserId: apiKey.userId, // Owner of the API key
+    } : {};
+    
+    // Mark that we're logging this request to prevent duplicate logs from other middlewares
+    (req as any).__auditLogged = true;
+    
+    // Extract error message from response body for better debugging
+    let errorMessage: string | undefined = undefined;
+    if (status === 'FAILURE') {
+      if (typeof body === 'string') {
+        try {
+          const parsed = JSON.parse(body);
+          errorMessage = parsed.error || parsed.message || body.substring(0, 500);
+        } catch {
+          errorMessage = body.substring(0, 500);
+        }
+      } else if (typeof body === 'object' && body !== null) {
+        errorMessage = (body as any).error || (body as any).message || JSON.stringify(body).substring(0, 500);
+      }
+    }
+    
     // Log asynchronously (don't block response)
+    // Always log API requests - this is critical for SOC monitoring
+    // IMPORTANT: This logs ALL HTTP methods including GET, POST, PUT, PATCH, DELETE
     createAuditLog({
       ...userInfo,
       action,
       resource,
       resourceId,
       status,
-      httpMethod: method,
-      httpPath: path,
+      httpMethod: method, // GET, POST, PUT, PATCH, DELETE
+      httpPath: actualPath,
       requestSize: requestSize > 0 ? requestSize : undefined,
       responseSize: responseSize > 0 ? responseSize : undefined,
       responseTime,
       ipAddress: getClientIp(req),
       userAgent: getUserAgent(req),
-      errorMessage: status === 'FAILURE' ? (typeof body === 'string' ? body.substring(0, 500) : JSON.stringify(body).substring(0, 500)) : undefined,
+      errorMessage,
       details: {
+        correlationId,
         statusCode,
-        ...(req.query && Object.keys(req.query).length > 0 && { queryParams: Object.keys(req.query) }),
+        endpoint: actualPath,
+        method: method, // GET, POST, PUT, PATCH, DELETE - ALL methods are logged
+        httpMethod: method, // Explicitly include HTTP method
+        authMethod: userInfo.authMethod, // How the request was authenticated: API_KEY, JWT, or UNAUTHENTICATED
+        ...(req.query && Object.keys(req.query).length > 0 && { queryParams: req.query }),
+        ...(Object.keys(sanitizedHeaders).length > 0 && { headers: sanitizedHeaders }),
+        // Include request body for POST, PUT, PATCH, DELETE (important for audit trail)
+        ...(req.body && typeof req.body === 'object' && Object.keys(req.body).length > 0 && { requestBody: req.body }),
+        ...apiKeyInfo,
+        // Add full error details for debugging
+        ...(status === 'FAILURE' && errorMessage && { errorDetails: errorMessage }),
       },
-    }).catch(console.error);
+    }).catch((error) => {
+      // Log errors but don't break the request
+      // Only log if it's not a panic (panics are already logged by retryPrismaOperation)
+      if (error?.name !== 'PrismaClientRustPanicError') {
+        console.error('Failed to create audit log:', error);
+        console.error('Failed audit log details:', {
+          method,
+          path: actualPath,
+          action,
+          resource,
+          status,
+        });
+      }
+    });
     
     return originalSend(body);
   };

@@ -47,6 +47,22 @@ router.post('/users/:userId/revoke-page', requireAdmin, validateRequest(grantPag
 router.post('/roles/:roleId/grant-page', requireAdmin, validateRequest(grantPagePermissionSchema), permissionsController.grantPagePermissionToRole.bind(permissionsController));
 router.post('/roles/:roleId/revoke-page', requireAdmin, validateRequest(grantPagePermissionSchema), permissionsController.revokePagePermissionFromRole.bind(permissionsController));
 router.get('/roles/:roleId/page-permissions', requireAdmin, permissionsController.getRolePagePermissions.bind(permissionsController));
+router.get('/presets', requireAdmin, permissionsController.getPresets.bind(permissionsController));
+router.post('/users/:userId/apply-preset', requireAdmin, validateRequest(z.object({
+  presetId: z.string().min(1, 'Preset ID is required'),
+})), permissionsController.applyPresetToUser.bind(permissionsController));
+router.post('/roles/:roleId/apply-preset', requireAdmin, validateRequest(z.object({
+  presetId: z.string().min(1, 'Preset ID is required'),
+})), permissionsController.applyPresetToRole.bind(permissionsController));
+router.post('/users/:userId/copy-from-user', requireAdmin, validateRequest(z.object({
+  sourceUserId: z.number().int().positive('Source user ID must be a positive integer'),
+})), permissionsController.copyPermissionsFromUser.bind(permissionsController));
+router.post('/users/:userId/copy-from-role', requireAdmin, validateRequest(z.object({
+  roleId: z.number().int().positive('Role ID must be a positive integer'),
+})), permissionsController.copyPermissionsFromRoleToUser.bind(permissionsController));
+router.post('/roles/:roleId/copy-from-role', requireAdmin, validateRequest(z.object({
+  sourceRoleId: z.number().int().positive('Source role ID must be a positive integer'),
+})), permissionsController.copyPermissionsFromRole.bind(permissionsController));
 router.post('/users/:userId/bulk-grant-page', requireAdmin, validateRequest(z.object({
   permissions: z.array(z.object({
     page: z.string().min(1),

@@ -23,6 +23,10 @@ router.get('/resources/:resource/:resourceId', socController.getResourceHistory.
 router.put('/incidents/:id', socController.updateIncident.bind(socController));
 router.post('/incidents/:id/mark', socController.markAsIncident.bind(socController));
 router.get('/metrics', socController.getMetrics.bind(socController));
+
+// Bulk operations
+router.post('/incidents/bulk-false-positive', socController.bulkMarkFalsePositive.bind(socController));
+router.post('/incidents/cleanup', socController.cleanupOldIncidents.bind(socController));
 router.get('/export/logs', socController.exportAuditLogs.bind(socController));
 router.get('/export/stats', socController.exportStats.bind(socController));
 // IP blocking - admin only
@@ -34,6 +38,11 @@ router.post('/unblock-ip', requireAdmin, socController.unblockIP.bind(socControl
 router.get('/trusted-users', requireAdmin, socController.getTrustedUsers.bind(socController));
 router.post('/trusted-users', requireAdmin, socController.addTrustedUser.bind(socController));
 router.delete('/trusted-users/:id', requireAdmin, socController.removeTrustedUser.bind(socController));
+
+// Audit log pinning
+router.post('/audit-logs/:id/pin', socController.pinAuditLog.bind(socController));
+router.post('/audit-logs/:id/unpin', socController.unpinAuditLog.bind(socController));
+router.post('/audit-logs/cleanup-pins', requireAdmin, socController.cleanupOldPins.bind(socController));
 
 export default router;
 

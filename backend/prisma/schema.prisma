@@ -55,6 +55,7 @@ model AuditLog {
   userId       Int? // User who performed the action (null for unauthenticated)
   userEmail    String? // Email of user (for quick reference)
   apiKeyId     Int? // API key ID if request was made with API key (for tracking API usage)
+  apiKey       ApiKey?  @relation(fields: [apiKeyId], references: [id])
   action       String // Action type: LOGIN, LOGOUT, CREATE, UPDATE, DELETE, READ, AUTH_FAILED, etc.
   resource     String // Resource type: SOLDIER, DEPARTMENT, ROLE, ROOM, AUTH
   resourceId   Int? // ID of the affected resource (null for list operations)
@@ -78,6 +79,11 @@ model AuditLog {
   resolvedAt     DateTime? // When incident was resolved
   resolvedBy     Int? // User ID who resolved it
 
+  // Pinning fields
+  isPinned       Boolean  @default(false) // Whether this log is pinned (important operations)
+  pinnedAt       DateTime? // When this log was pinned
+  pinnedBy       Int? // User ID who pinned it (null for auto-pinned)
+
   @@index([userId])
   @@index([apiKeyId])
   @@index([action])
@@ -88,6 +94,8 @@ model AuditLog {
   @@index([priority])
   @@index([assignedTo])
   @@index([httpMethod, httpPath])
+  @@index([isPinned])
+  @@index([pinnedAt])
 }
 
 model BlockedIP {
@@ -131,6 +139,7 @@ model ApiKey {
   isActive    Boolean   @default(true)
   createdAt   DateTime  @default(now())
   permissions String? // JSON string with permissions (optional)
+  auditLogs   AuditLog[] // Audit logs that used this API key
 
   @@index([key])
   @@index([isActive])

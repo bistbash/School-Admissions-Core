@@ -23,16 +23,20 @@ export async function requireAPIKey(req: Request, res: Response, next: NextFunct
       // Verify API key
       const isValid = await verifyAPIKey(apiKey);
       if (!isValid) {
-        await auditFromRequest(req, 'AUTH_FAILED', 'AUTH', {
-          status: 'FAILURE',
-          errorMessage: 'Invalid or expired API key',
-          details: {
-            endpoint: req.path,
-            method: req.method,
-            authType: 'API_KEY',
-            // NEVER log the actual key
-          },
-        }).catch(console.error);
+        // Only log if auditMiddleware hasn't already logged this request
+        if (!(req as any).__auditLogged) {
+          await auditFromRequest(req, 'AUTH_FAILED', 'AUTH', {
+            status: 'FAILURE',
+            errorMessage: 'Invalid or expired API key',
+            details: {
+              endpoint: req.path || req.url?.split('?')[0] || '',
+              method: req.method,
+              authType: 'API_KEY',
+              reason: 'API key verification failed',
+              // NEVER log the actual key
+            },
+          }).catch(console.error);
+        }
         throw new ForbiddenError('Invalid or expired API key');
       }
 
@@ -96,29 +100,37 @@ export async function requireAPIKey(req: Request, res: Response, next: NextFunct
         return next();
       } catch (error) {
         // JWT verification failed
-        await auditFromRequest(req, 'AUTH_FAILED', 'AUTH', {
-          status: 'FAILURE',
-          errorMessage: 'Invalid or expired JWT token',
-          details: {
-            endpoint: req.path,
-            method: req.method,
-            authType: 'JWT',
-          },
-        }).catch(console.error);
+        // Only log if auditMiddleware hasn't already logged this request
+        if (!(req as any).__auditLogged) {
+          await auditFromRequest(req, 'AUTH_FAILED', 'AUTH', {
+            status: 'FAILURE',
+            errorMessage: 'Invalid or expired JWT token',
+            details: {
+              endpoint: req.path || req.url?.split('?')[0] || '',
+              method: req.method,
+              authType: 'JWT',
+              reason: 'JWT token verification failed',
+            },
+          }).catch(console.error);
+        }
         throw new ForbiddenError('Invalid or expired token');
       }
     }
 
     // No valid authentication provided
-    await auditFromRequest(req, 'AUTH_FAILED', 'AUTH', {
-      status: 'FAILURE',
-      errorMessage: 'API key or JWT token required for this operation',
-      details: {
-        endpoint: req.path,
-        method: req.method,
-        authType: 'REQUIRED',
-      },
-    }).catch(console.error);
+    // Only log if auditMiddleware hasn't already logged this request
+    if (!(req as any).__auditLogged) {
+      await auditFromRequest(req, 'AUTH_FAILED', 'AUTH', {
+        status: 'FAILURE',
+        errorMessage: 'API key or JWT token required for this operation',
+        details: {
+          endpoint: req.path || req.url?.split('?')[0] || '',
+          method: req.method,
+          authType: 'REQUIRED',
+          reason: 'No valid authentication provided',
+        },
+      }).catch(console.error);
+    }
     throw new ForbiddenError('API key or JWT token is required for this operation');
   } catch (error) {
     next(error);

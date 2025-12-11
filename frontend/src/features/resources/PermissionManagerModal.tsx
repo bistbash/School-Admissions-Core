@@ -9,7 +9,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { apiClient } from '../../shared/lib/api';
 import { Button } from '../../shared/ui/Button';
 import { Input } from '../../shared/ui/Input';
-import { Eye, Edit, Check, Loader2 } from 'lucide-react';
+import { Eye, Edit, Check, Loader2, AlertTriangle } from 'lucide-react';
 import { Modal } from '../../shared/ui/Modal';
 import { useAuth } from '../auth/AuthContext';
 import { usePageMode } from '../permissions/PageModeContext';
@@ -34,6 +34,8 @@ interface UserPagePermissions {
     view: boolean;
     edit: boolean;
     customModes?: string[];
+    viewFromRole?: boolean;
+    editFromRole?: boolean;
   };
 }
 
@@ -60,6 +62,9 @@ export function PermissionManagerModal({
   const [searchQuery, setSearchQuery] = useState('');
   const [pendingOperations, setPendingOperations] = useState<Set<string>>(new Set());
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [showEditWarningModal, setShowEditWarningModal] = useState(false);
+  const [pendingEditPage, setPendingEditPage] = useState<string | null>(null);
+  const [confirmationText, setConfirmationText] = useState('');
 
   // Only admins can manage permissions
   if (!user?.isAdmin) {
@@ -169,7 +174,14 @@ export function PermissionManagerModal({
     }));
   }, []);
 
-  const handleGrantPermission = useCallback(async (page: string, action: 'view' | 'edit') => {
+  const handleGrantPermission = useCallback(async (page: string, action: 'view' | 'edit', skipWarning = false) => {
+    // Show warning modal only for edit permissions on 'api-keys' page
+    if (action === 'edit' && page === 'api-keys' && !skipWarning) {
+      setPendingEditPage(page);
+      setShowEditWarningModal(true);
+      return;
+    }
+
     const operationKey = `${page}:${action}:grant`;
     
     // Prevent duplicate operations
@@ -198,6 +210,32 @@ export function PermissionManagerModal({
       if (error.response?.status === 409 || error.response?.status === 200) {
         // Permission already granted - this is fine, just reload silently
         await loadData(true);
+        return;
+      }
+      
+      // Check if it's a validation error (400) or forbidden (403)
+      if (error.response?.status === 400 || error.response?.status === 403) {
+        const errorData = error.response?.data;
+        let errorMsg = 'שגיאה במתן הרשאה';
+        
+        if (errorData?.error) {
+          errorMsg = errorData.error;
+        } else if (errorData?.details && Array.isArray(errorData.details)) {
+          // Zod validation errors
+          errorMsg = errorData.details.map((d: any) => d.message || d).join(', ');
+        } else if (errorData?.message) {
+          errorMsg = errorData.message;
+        }
+        
+        // Special handling for "Cannot edit your own permissions"
+        if (errorMsg.includes('Cannot edit your own permissions') || errorMsg.includes('עצמך')) {
+          errorMsg = 'לא ניתן לערוך את ההרשאות שלך. בקש ממנהל אחר לעשות זאת.';
+        }
+        
+        // Revert optimistic update
+        updatePermissionOptimistically(page, action, false);
+        setErrorMessage(errorMsg);
+        console.error('Failed to grant permission (400/403):', errorData);
         return;
       }
       
@@ -243,6 +281,32 @@ export function PermissionManagerModal({
       if (error.response?.status === 404 || error.response?.status === 200) {
         // Permission already revoked - this is fine, just reload silently
         await loadData(true);
+        return;
+      }
+      
+      // Check if it's a validation error (400) or forbidden (403)
+      if (error.response?.status === 400 || error.response?.status === 403) {
+        const errorData = error.response?.data;
+        let errorMsg = 'שגיאה בהסרת הרשאה';
+        
+        if (errorData?.error) {
+          errorMsg = errorData.error;
+        } else if (errorData?.details && Array.isArray(errorData.details)) {
+          // Zod validation errors
+          errorMsg = errorData.details.map((d: any) => d.message || d).join(', ');
+        } else if (errorData?.message) {
+          errorMsg = errorData.message;
+        }
+        
+        // Special handling for "Cannot edit your own permissions"
+        if (errorMsg.includes('Cannot edit your own permissions') || errorMsg.includes('עצמך')) {
+          errorMsg = 'לא ניתן לערוך את ההרשאות שלך. בקש ממנהל אחר לעשות זאת.';
+        }
+        
+        // Revert optimistic update
+        updatePermissionOptimistically(page, action, true);
+        setErrorMessage(errorMsg);
+        console.error('Failed to revoke permission (400/403):', errorData);
         return;
       }
       
@@ -383,7 +447,7 @@ export function PermissionManagerModal({
   }, [targetId, type, pendingOperations, loadData]);
 
   // Filter and group pages
-  const { filteredPages, categories } = useMemo(() => {
+  const { filteredPages } = useMemo(() => {
     const filtered = pages.filter((p) => {
       const query = searchQuery.toLowerCase();
       return (
@@ -396,8 +460,8 @@ export function PermissionManagerModal({
       );
     });
 
-    const cats = Array.from(new Set(filtered.map((p) => p.category)));
-    return { filteredPages: filtered, categories: cats };
+    // Don't group by categories - just return all filtered pages
+    return { filteredPages: filtered };
   }, [pages, searchQuery]);
 
   // Check if operation is pending
@@ -415,6 +479,7 @@ export function PermissionManagerModal({
   }
 
   return (
+    <>
     <Modal 
       isOpen={isOpen} 
       onClose={onClose} 
@@ -446,21 +511,8 @@ export function PermissionManagerModal({
             <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
           </div>
         ) : (
-          <div className="space-y-8">
-            {categories.map((category) => {
-              const categoryPages = filteredPages.filter((p) => p.category === category);
-              if (categoryPages.length === 0) return null;
-              
-              const categoryHebrew = categoryPages[0]?.categoryHebrew || category;
-
-              return (
-                <div key={category} className="space-y-4">
-                  <h3 className="text-lg font-semibold text-black dark:text-white pb-2 border-b border-gray-200 dark:border-[#1F1F1F]">
-                    {categoryHebrew}
-                  </h3>
-                  
-                  <div className="space-y-4">
-                    {categoryPages.map((page) => {
+          <div className="space-y-4">
+            {filteredPages.map((page) => {
                       const hasView = pagePermissions[page.page]?.view || false;
                       const hasEdit = pagePermissions[page.page]?.edit || false;
                       const hasCustomModes = pagePermissions[page.page]?.customModes || [];
@@ -632,14 +684,11 @@ export function PermissionManagerModal({
                               </p>
                               <div className="flex flex-wrap gap-1.5">
                                 {displayedAPIs.map((api) => {
-                                  // Check if this API exists in editAPIs
-                                  const isEditAPI = page.editAPIs.some(
-                                    e => e.resource === api.resource && e.action === api.action
-                                  );
-                                  // Color coding: green for edit permissions, blue for view
-                                  const colorClass = isEditAPI && hasEdit
-                                    ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800'
-                                    : 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800';
+                                  // Color coding: blue for read permissions, green for create/update/delete
+                                  const isReadAction = api.action === 'read';
+                                  const colorClass = isReadAction
+                                    ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800'
+                                    : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800';
                                   
                                   // Use resource:action as key since we've already deduplicated
                                   const uniqueKey = `${api.resource}:${api.action}`;
@@ -659,10 +708,6 @@ export function PermissionManagerModal({
                           )}
                         </div>
                       );
-                    })}
-                  </div>
-                </div>
-              );
             })}
 
             {filteredPages.length === 0 && (
@@ -674,5 +719,128 @@ export function PermissionManagerModal({
         )}
       </div>
     </Modal>
+
+    {/* Warning Modal for Edit Permissions */}
+    <Modal
+      isOpen={showEditWarningModal}
+      onClose={() => {
+        setShowEditWarningModal(false);
+        setPendingEditPage(null);
+        setConfirmationText('');
+      }}
+      title="אזהרה: מתן הרשאת עריכה"
+      size="lg"
+      closeOnBackdropClick={false}
+    >
+      <div className="p-6 space-y-4">
+        <div className="flex items-start gap-4">
+          <div className="flex-shrink-0">
+            <div className="w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+              <AlertTriangle className="h-6 w-6 text-red-600 dark:text-red-400" />
+            </div>
+          </div>
+          <div className="flex-1 space-y-4">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                מתן הרשאת עריכה כולל גישה ל-APIs
+              </h3>
+              <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+                אתה עומד לתת הרשאת <strong>עריכה</strong> לדף <strong>{pendingEditPage && pages.find(p => p.page === pendingEditPage)?.displayNameHebrew || pendingEditPage}</strong>.
+              </p>
+            </div>
+
+            {/* מה זה API - הסבר בסיסי */}
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 space-y-2">
+              <h4 className="font-semibold text-blue-900 dark:text-blue-200 text-sm mb-2">
+                📚 מה זה API?
+              </h4>
+              <p className="text-sm text-blue-800 dark:text-blue-300 leading-relaxed">
+                <strong>API (Application Programming Interface)</strong> הוא דרך שבה תוכנות מתקשרות זו עם זו. 
+                במערכת שלנו, API מאפשר למשתמשים או לתוכנות אחרות לבצע פעולות במערכת דרך בקשות ממוחשבות, 
+                כמו יצירת תלמיד חדש, עדכון פרטים, או מחיקת נתונים - <strong>כל זאת ללא שימוש בממשק הגרפי של האתר</strong>.
+              </p>
+            </div>
+
+            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 space-y-3">
+              <h4 className="font-semibold text-yellow-900 dark:text-yellow-200 text-sm">
+                ⚠️ המשמעות של הרשאת עריכה:
+              </h4>
+              <ul className="space-y-2 text-sm text-yellow-800 dark:text-yellow-300 list-disc list-inside">
+                <li>
+                  <strong>גישה ל-APIs של יצירה, עדכון ומחיקה</strong> - המשתמש/תפקיד יוכל ליצור, לעדכן ולמחוק נתונים דרך ה-API, 
+                  גם ללא שימוש בממשק הגרפי של האתר. זה מאפשר אוטומציה ופעולות מרובות בבת אחת.
+                </li>
+                <li>
+                  <strong>יצירת מפתחות API</strong> - עם הרשאת עריכה לדף "מפתחות API", המשתמש יוכל ליצור מפתחות API 
+                  שיאפשרו לתוכנות אחרות לגשת למערכת בשמו ולבצע פעולות לפי ההרשאות שלו.
+                </li>
+                <li>
+                  <strong>שינויים בלתי הפיכים</strong> - פעולות מחיקה ופעולות הרסניות אחרות לא תמיד ניתנות לביטול. 
+                  פעולות דרך API יכולות להתבצע במהירות גבוהה ולגרום לנזק משמעותי.
+                </li>
+                <li>
+                  <strong>גישה לנתונים רגישים</strong> - הרשאת עריכה כוללת גישה לנתונים פרטיים ורגישים במערכת, 
+                  כולל מידע אישי, פרטי משתמשים, ונתונים אקדמיים.
+                </li>
+                <li>
+                  <strong>לוגים וניטור</strong> - כל הפעולות מתועדות במערכת SOC לניטור אבטחה, 
+                  אבל זה לא מונע נזק - רק מאפשר לזהות אותו אחרי מעשה.
+                </li>
+              </ul>
+            </div>
+
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+              <p className="text-sm text-red-800 dark:text-red-300 font-medium">
+                <strong>שים לב:</strong> ודא שהמשתמש/תפקיד אכן צריך הרשאת עריכה. אם רק צפייה נדרשת, השתמש בהרשאת צפייה בלבד. 
+                הרשאת עריכה היא הרשאה חזקה מאוד שיכולה לאפשר שינויים משמעותיים במערכת.
+              </p>
+            </div>
+
+            {/* Confirmation Input */}
+            <div className="space-y-2 pt-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                כדי לאשר, אנא הקלד: <strong className="text-gray-900 dark:text-white">"אני מבין את האמור לעיל"</strong>
+              </label>
+              <Input
+                type="text"
+                value={confirmationText}
+                onChange={(e) => setConfirmationText(e.target.value)}
+                placeholder='הקלד: "אני מבין את האמור לעיל"'
+                className="w-full"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200 dark:border-[#1F1F1F]">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowEditWarningModal(false);
+                  setPendingEditPage(null);
+                  setConfirmationText('');
+                }}
+              >
+                ביטול
+              </Button>
+              <Button
+                variant="default"
+                className="bg-red-600 hover:bg-red-700 text-white border-red-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={confirmationText.trim() !== 'אני מבין את האמור לעיל'}
+                onClick={async () => {
+                  if (pendingEditPage && confirmationText.trim() === 'אני מבין את האמור לעיל') {
+                    setShowEditWarningModal(false);
+                    await handleGrantPermission(pendingEditPage, 'edit', true);
+                    setPendingEditPage(null);
+                    setConfirmationText('');
+                  }
+                }}
+              >
+                אני מבין - המשך
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Modal>
+    </>
   );
 }

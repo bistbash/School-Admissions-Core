@@ -296,10 +296,19 @@ export function requireAPIPermission(req: Request, res: Response, next: NextFunc
   const userId = user?.userId || apiKey?.userId;
 
   if (!userId) {
-    auditFromRequest(req, 'UNAUTHORIZED_ACCESS', 'AUTH', {
-      status: 'FAILURE',
-      errorMessage: 'Authentication required',
-    }).catch(console.error);
+    // Only log if auditMiddleware hasn't already logged this request
+    // This prevents duplicate logs for the same unauthenticated request
+    if (!(req as any).__auditLogged) {
+      auditFromRequest(req, 'UNAUTHORIZED_ACCESS', 'AUTH', {
+        status: 'FAILURE',
+        errorMessage: 'Authentication required',
+        details: {
+          endpoint: req.path || req.url?.split('?')[0] || '',
+          method: req.method,
+          reason: 'No authentication provided',
+        },
+      }).catch(console.error);
+    }
     return next(new UnauthorizedError('Authentication required'));
   }
 
