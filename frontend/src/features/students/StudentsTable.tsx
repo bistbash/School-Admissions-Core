@@ -43,10 +43,10 @@ const statusLabels: Record<string, string> = {
 };
 
 const statusColors: Record<string, string> = {
-  ACTIVE: 'bg-green-100 text-green-800 dark:bg-green-950/30 dark:text-green-400',
-  GRADUATED: 'bg-blue-100 text-blue-800 dark:bg-blue-950/30 dark:text-blue-400',
-  LEFT: 'bg-amber-100 text-amber-800 dark:bg-amber-950/30 dark:text-amber-400',
-  ARCHIVED: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400',
+  ACTIVE: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 border border-gray-200 dark:border-gray-700',
+  GRADUATED: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 border border-gray-200 dark:border-gray-700',
+  LEFT: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400 border border-gray-200 dark:border-gray-700',
+  ARCHIVED: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400 border border-gray-200 dark:border-gray-700',
 };
 
 export function StudentsTable({ students, onRefresh }: StudentsTableProps) {
@@ -91,77 +91,85 @@ export function StudentsTable({ students, onRefresh }: StudentsTableProps) {
   }
 
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-[#1F1F1F]">
       <table className="w-full">
         <thead>
-          <tr className="border-b border-gray-200 dark:border-[#1F1F1F]">
-            <th className="text-right px-4 py-3 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+          <tr className="bg-gray-50 dark:bg-[#0A0A0A] border-b border-gray-200 dark:border-[#1F1F1F]">
+            <th className="text-right px-5 py-4 text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
               ת.ז
             </th>
-            <th className="text-right px-4 py-3 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+            <th className="text-right px-5 py-4 text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
               שם פרטי
             </th>
-            <th className="text-right px-4 py-3 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+            <th className="text-right px-5 py-4 text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
               שם משפחה
             </th>
-            <th className="text-right px-4 py-3 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+            <th className="text-right px-5 py-4 text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
               מין
             </th>
-            <th className="text-right px-4 py-3 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+            <th className="text-right px-5 py-4 text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
               כיתה
             </th>
-            <th className="text-right px-4 py-3 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+            <th className="text-right px-5 py-4 text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
               מחזור
             </th>
-            <th className="text-right px-4 py-3 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+            <th className="text-right px-5 py-4 text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
               סטטוס
             </th>
-            <th className="text-right px-4 py-3 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+            <th className="text-right px-5 py-4 text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
               פעולות
             </th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-200 dark:divide-[#1F1F1F]">
-          {students.map((student) => {
+        <tbody className="divide-y divide-gray-200 dark:divide-[#1F1F1F] bg-white dark:bg-[#080808]">
+          {students.map((student, index) => {
             const isExpanded = expandedRows.has(student.id);
             return (
               <React.Fragment key={student.id}>
-                <tr className="hover:bg-gray-50 dark:hover:bg-[#0F0F0F] transition-colors">
-                  <td className="px-4 py-3 text-sm text-black dark:text-white font-mono">
+                <tr className={cn(
+                  "hover:bg-gray-50 dark:hover:bg-[#0F0F0F] transition-colors duration-100",
+                  isExpanded && "bg-blue-50/50 dark:bg-blue-950/10"
+                )}>
+                  <td className="px-5 py-4 text-sm text-black dark:text-white font-mono font-medium">
                     {student.idNumber}
                   </td>
-                  <td className="px-4 py-3 text-sm text-black dark:text-white">
+                  <td className="px-5 py-4 text-sm text-black dark:text-white font-medium">
                     {student.firstName}
                   </td>
-                  <td className="px-4 py-3 text-sm text-black dark:text-white font-medium">
+                  <td className="px-5 py-4 text-sm text-black dark:text-white font-semibold">
                     {student.lastName}
                   </td>
-                  <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
-                    {student.gender === 'MALE' ? 'זכר' : 'נקבה'}
+                  <td className="px-5 py-4">
+                    <span className="inline-flex items-center px-2.5 py-1 rounded text-xs font-medium bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700">
+                      {student.gender === 'MALE' ? 'זכר' : 'נקבה'}
+                    </span>
                   </td>
-                  <td className="px-4 py-3 text-sm text-black dark:text-white">
-                    {getCurrentClass(student)}
+                  <td className="px-5 py-4 text-sm text-black dark:text-white">
+                    <span className="font-medium">{getCurrentClass(student)}</span>
                   </td>
-                  <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
-                    {student.cohort?.name || '-'}
+                  <td className="px-5 py-4 text-sm text-gray-700 dark:text-gray-300">
+                    {student.cohort?.name || <span className="text-gray-400 dark:text-gray-600">-</span>}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-5 py-4">
                     <span
                       className={cn(
-                        'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium',
+                        'inline-flex items-center px-2.5 py-1 rounded text-xs font-medium',
                         statusColors[student.status] || statusColors.ARCHIVED
                       )}
                     >
                       {statusLabels[student.status] || student.status}
                     </span>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-5 py-4">
                     <div className="flex items-center justify-end gap-1">
                       <Button
                         variant="ghost"
                         size="icon"
                         onClick={() => toggleRow(student.id)}
-                        className="h-8 w-8"
+                        className={cn(
+                          "h-8 w-8 hover:bg-gray-200 dark:hover:bg-gray-800",
+                          isExpanded && "bg-gray-200 dark:bg-gray-800"
+                        )}
                       >
                         <MoreVertical className="h-4 w-4" />
                       </Button>
@@ -170,58 +178,69 @@ export function StudentsTable({ students, onRefresh }: StudentsTableProps) {
                 </tr>
                 {isExpanded && (
                   <tr>
-                    <td colSpan={8} className="px-4 py-4 bg-gray-50 dark:bg-[#0F0F0F]">
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
-                        <div>
-                          <span className="text-gray-600 dark:text-gray-400">ת.ז: </span>
-                          <span className="text-black dark:text-white font-mono">{student.idNumber}</span>
-                        </div>
-                        {student.cohort && (
-                          <div>
-                            <span className="text-gray-600 dark:text-gray-400">מחזור: </span>
-                            <span className="text-black dark:text-white">{student.cohort.name} ({student.cohort.startYear})</span>
+                    <td colSpan={8} className="px-5 py-5 bg-gray-50 dark:bg-[#0F0F0F] border-t border-gray-200 dark:border-[#1F1F1F]">
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                          <div className="p-3 rounded-lg bg-white dark:bg-[#0A0A0A] border border-gray-200 dark:border-[#1F1F1F]">
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">ת.ז</p>
+                            <p className="text-sm font-mono font-medium text-black dark:text-white">{student.idNumber}</p>
                           </div>
-                        )}
-                        {student.enrollments && student.enrollments.length > 0 && (
-                          <div>
-                            <span className="text-gray-600 dark:text-gray-400">שנת לימודים: </span>
-                            <span className="text-black dark:text-white">
-                              {student.enrollments[0].class.academicYear}
+                          {student.cohort && (
+                            <div className="p-3 rounded-lg bg-white dark:bg-[#0A0A0A] border border-gray-200 dark:border-[#1F1F1F]">
+                              <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">מחזור</p>
+                              <p className="text-sm font-medium text-black dark:text-white">
+                                {student.cohort.name} ({student.cohort.startYear})
+                              </p>
+                            </div>
+                          )}
+                          {student.enrollments && student.enrollments.length > 0 && (
+                            <div className="p-3 rounded-lg bg-white dark:bg-[#0A0A0A] border border-gray-200 dark:border-[#1F1F1F]">
+                              <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">שנת לימודים</p>
+                              <p className="text-sm font-medium text-black dark:text-white">
+                                {student.enrollments[0].class.academicYear}
+                              </p>
+                            </div>
+                          )}
+                          <div className="p-3 rounded-lg bg-white dark:bg-[#0A0A0A] border border-gray-200 dark:border-[#1F1F1F]">
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">סטטוס</p>
+                            <span
+                              className={cn(
+                                'inline-flex items-center px-2 py-0.5 rounded text-xs font-medium',
+                                statusColors[student.status] || statusColors.ARCHIVED
+                              )}
+                            >
+                              {statusLabels[student.status] || student.status}
                             </span>
                           </div>
-                        )}
-                        <div>
-                          <span className="text-gray-600 dark:text-gray-400">סטטוס: </span>
-                          <span className="text-black dark:text-white">
-                            {statusLabels[student.status] || student.status}
-                          </span>
                         </div>
-                      </div>
-                      <div className="mt-4 flex items-center gap-2">
-                        {mode === 'edit' && (
+                        <div className="flex items-center gap-2 pt-2 border-t border-gray-200 dark:border-[#1F1F1F]">
+                          {mode === 'edit' && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                // TODO: Implement edit functionality
+                                console.log('Edit student', student.id);
+                              }}
+                              className="gap-2"
+                            >
+                              <Edit className="h-3.5 w-3.5" />
+                              ערוך
+                            </Button>
+                          )}
                           <Button
                             variant="outline"
                             size="sm"
                             onClick={() => {
-                              // TODO: Implement edit functionality
-                              console.log('Edit student', student.id);
+                              // TODO: Implement view details functionality
+                              console.log('View student', student.id);
                             }}
+                            className="gap-2"
                           >
-                            <Edit className="h-3 w-3 ml-1" />
-                            ערוך
+                            <Eye className="h-3.5 w-3.5" />
+                            צפה בפרטים
                           </Button>
-                        )}
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            // TODO: Implement view details functionality
-                            console.log('View student', student.id);
-                          }}
-                        >
-                          <Eye className="h-3 w-3 ml-1" />
-                          צפה בפרטים
-                        </Button>
+                        </div>
                       </div>
                     </td>
                   </tr>

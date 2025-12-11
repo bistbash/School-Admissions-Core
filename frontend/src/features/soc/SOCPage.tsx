@@ -374,7 +374,7 @@ export function SOCPage() {
           const res = await apiClient.get(`/soc/audit-logs?${params.toString()}`);
           // Handle different response formats
           const logsData = res.data?.logs || (Array.isArray(res.data) ? res.data : []);
-          
+
           // Sort logs: pinned first (by pinnedAt desc), then unpinned (by createdAt desc)
           const sortedLogs = [...logsData].sort((a, b) => {
             if (a.isPinned && !b.isPinned) return -1;
@@ -387,7 +387,7 @@ export function SOCPage() {
             // Both unpinned - sort by createdAt (newest first)
             return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
           });
-          
+
           setLogs(sortedLogs);
           if (sortedLogs.length === 0) {
             console.log('No logs returned from API. Response:', res.data);
@@ -638,21 +638,30 @@ export function SOCPage() {
 
   const handlePinLog = async (logId: number) => {
     try {
-      // Save current scroll position
-      const scrollContainer = document.querySelector('[data-audit-logs-container]') || window;
-      const scrollPosition = scrollContainer === window 
-        ? window.scrollY 
-        : (scrollContainer as HTMLElement).scrollTop;
-      
       // Find the log to pin
       const logToPin = logs.find(log => log.id === logId);
       if (!logToPin) return;
 
-      // Find the row element to maintain visual position
+      // Find the current row element and get its position relative to viewport
       const rowElement = document.querySelector(`[data-log-id="${logId}"]`) as HTMLElement;
-      const rowOffset = rowElement ? rowElement.offsetTop : null;
+      const container = document.querySelector('[data-audit-logs-container]') as HTMLElement || document.documentElement;
+      const scrollContainer = container === document.documentElement ? window : container;
+      
+      // Save the current scroll position and the row's position relative to viewport
+      const currentScrollTop = scrollContainer === window 
+        ? window.scrollY 
+        : (scrollContainer as HTMLElement).scrollTop;
+      
+      let rowOffsetFromViewport = 0;
+      if (rowElement) {
+        const containerRect = scrollContainer === window 
+          ? { top: 0, height: window.innerHeight }
+          : (scrollContainer as HTMLElement).getBoundingClientRect();
+        const rowRect = rowElement.getBoundingClientRect();
+        rowOffsetFromViewport = rowRect.top - (scrollContainer === window ? 0 : containerRect.top);
+      }
 
-      // Optimistically update: move pinned log to top
+      // Optimistically update: mark as pinned and move to top
       setLogs(prevLogs => {
         const updatedLogs = prevLogs.map(log => 
           log.id === logId 
@@ -674,13 +683,37 @@ export function SOCPage() {
         });
       });
 
-      // Restore scroll position after state update
+      // After DOM updates, restore scroll position so the pinned log appears at the same viewport position
+      // Use double requestAnimationFrame to ensure DOM has updated
       requestAnimationFrame(() => {
-        if (scrollContainer === window) {
-          window.scrollTo(0, scrollPosition);
-        } else {
-          (scrollContainer as HTMLElement).scrollTop = scrollPosition;
-        }
+        requestAnimationFrame(() => {
+          const newRowElement = document.querySelector(`[data-log-id="${logId}"]`) as HTMLElement;
+          if (newRowElement && rowOffsetFromViewport !== 0) {
+            const containerRect = scrollContainer === window 
+              ? { top: 0 }
+              : (scrollContainer as HTMLElement).getBoundingClientRect();
+            const newRowRect = newRowElement.getBoundingClientRect();
+            const currentRowOffset = newRowRect.top - (scrollContainer === window ? 0 : containerRect.top);
+            const offsetDifference = currentRowOffset - rowOffsetFromViewport;
+            
+            // Adjust scroll to maintain the same viewport position
+            const newScrollTop = currentScrollTop - offsetDifference;
+            
+            if (scrollContainer === window) {
+              window.scrollTo({ top: newScrollTop, behavior: 'auto' });
+            } else {
+              (scrollContainer as HTMLElement).scrollTop = newScrollTop;
+            }
+          } else if (newRowElement) {
+            // If row is now at the top, scroll to show it at a reasonable position (e.g., 100px from top)
+            const targetScrollTop = currentScrollTop + rowOffsetFromViewport - 100;
+            if (scrollContainer === window) {
+              window.scrollTo({ top: Math.max(0, targetScrollTop), behavior: 'auto' });
+            } else {
+              (scrollContainer as HTMLElement).scrollTop = Math.max(0, targetScrollTop);
+            }
+          }
+        });
       });
 
       const response = await apiClient.post(`/soc/audit-logs/${logId}/pin`);
@@ -706,15 +739,6 @@ export function SOCPage() {
             return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
           });
         });
-        
-        // Restore scroll position again after server update
-        requestAnimationFrame(() => {
-          if (scrollContainer === window) {
-            window.scrollTo(0, scrollPosition);
-          } else {
-            (scrollContainer as HTMLElement).scrollTop = scrollPosition;
-          }
-        });
       }
     } catch (error: any) {
       console.error('Pin error:', error);
@@ -727,11 +751,24 @@ export function SOCPage() {
 
   const handleUnpinLog = async (logId: number) => {
     try {
-      // Save current scroll position
-      const scrollContainer = document.querySelector('[data-audit-logs-container]') || window;
-      const scrollPosition = scrollContainer === window 
+      // Find the current row element and get its position relative to viewport
+      const rowElement = document.querySelector(`[data-log-id="${logId}"]`) as HTMLElement;
+      const container = document.querySelector('[data-audit-logs-container]') as HTMLElement || document.documentElement;
+      const scrollContainer = container === document.documentElement ? window : container;
+      
+      // Save the current scroll position and the row's position relative to viewport
+      const currentScrollTop = scrollContainer === window 
         ? window.scrollY 
         : (scrollContainer as HTMLElement).scrollTop;
+      
+      let rowOffsetFromViewport = 0;
+      if (rowElement) {
+        const containerRect = scrollContainer === window 
+          ? { top: 0, height: window.innerHeight }
+          : (scrollContainer as HTMLElement).getBoundingClientRect();
+        const rowRect = rowElement.getBoundingClientRect();
+        rowOffsetFromViewport = rowRect.top - (scrollContainer === window ? 0 : containerRect.top);
+      }
 
       // Optimistically update: remove pin and re-sort
       setLogs(prevLogs => {
@@ -755,48 +792,52 @@ export function SOCPage() {
         });
       });
 
-      // Restore scroll position after state update
+      // After DOM updates, restore scroll position so the unpinned log appears at the same viewport position
       requestAnimationFrame(() => {
-        if (scrollContainer === window) {
-          window.scrollTo(0, scrollPosition);
-        } else {
-          (scrollContainer as HTMLElement).scrollTop = scrollPosition;
-        }
-      });
-
-      const response = await apiClient.post(`/soc/audit-logs/${logId}/unpin`);
-      
-      // Update with server response and re-sort
-      if (response.data?.log) {
-        setLogs(prevLogs => {
-          const updated = prevLogs.map(log => 
-            log.id === logId 
-              ? { ...log, ...response.data.log }
-              : log
-          );
-          
-          // Re-sort after server update
-          return updated.sort((a, b) => {
-            if (a.isPinned && !b.isPinned) return -1;
-            if (!a.isPinned && b.isPinned) return 1;
-            if (a.isPinned && b.isPinned) {
-              const aPinned = a.pinnedAt ? new Date(a.pinnedAt).getTime() : 0;
-              const bPinned = b.pinnedAt ? new Date(b.pinnedAt).getTime() : 0;
-              return bPinned - aPinned;
-            }
-            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-          });
-        });
-        
-        // Restore scroll position again after server update
         requestAnimationFrame(() => {
-          if (scrollContainer === window) {
-            window.scrollTo(0, scrollPosition);
-          } else {
-            (scrollContainer as HTMLElement).scrollTop = scrollPosition;
+          const newRowElement = document.querySelector(`[data-log-id="${logId}"]`) as HTMLElement;
+          if (newRowElement && rowOffsetFromViewport !== 0) {
+            const containerRect = scrollContainer === window 
+              ? { top: 0 }
+              : (scrollContainer as HTMLElement).getBoundingClientRect();
+            const newRowRect = newRowElement.getBoundingClientRect();
+            const currentRowOffset = newRowRect.top - (scrollContainer === window ? 0 : containerRect.top);
+            const offsetDifference = currentRowOffset - rowOffsetFromViewport;
+            
+            // Adjust scroll to maintain the same viewport position
+            const newScrollTop = currentScrollTop - offsetDifference;
+            
+            if (scrollContainer === window) {
+              window.scrollTo({ top: newScrollTop, behavior: 'auto' });
+            } else {
+              (scrollContainer as HTMLElement).scrollTop = newScrollTop;
+            }
           }
         });
-      }
+      });
+
+      await apiClient.post(`/soc/audit-logs/${logId}/unpin`);
+      
+      // Final update from server and re-sort
+      setLogs(prevLogs => {
+        const updated = prevLogs.map(log => 
+          log.id === logId 
+            ? { ...log, isPinned: false, pinnedAt: undefined, pinnedBy: undefined }
+            : log
+        );
+        
+        // Re-sort after server update
+        return updated.sort((a, b) => {
+          if (a.isPinned && !b.isPinned) return -1;
+          if (!a.isPinned && b.isPinned) return 1;
+          if (a.isPinned && b.isPinned) {
+            const aPinned = a.pinnedAt ? new Date(a.pinnedAt).getTime() : 0;
+            const bPinned = b.pinnedAt ? new Date(b.pinnedAt).getTime() : 0;
+            return bPinned - aPinned;
+          }
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        });
+      });
     } catch (error: any) {
       console.error('Unpin error:', error);
       // Revert optimistic update on error by reloading
@@ -807,21 +848,34 @@ export function SOCPage() {
   };
 
   return (
-    <div className="space-y-8 animate-in max-w-7xl mx-auto">
+    <div className="space-y-6 animate-in max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between pb-4 border-b border-gray-200 dark:border-[#1F1F1F]">
         <div className="space-y-1">
-          <h1 className="text-2xl font-medium tracking-tight text-black dark:text-white flex items-center gap-2">
-            <Shield className="h-6 w-6" />
+          <h1 className="text-3xl font-semibold tracking-tight text-black dark:text-white flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+              <Shield className="h-6 w-6 text-gray-700 dark:text-gray-300" />
+            </div>
             מרכז אבטחה (SOC)
             {wsConnected ? (
-              <Wifi className="h-4 w-4 text-green-600 dark:text-green-400" aria-label="מחובר לניטור בזמן אמת" />
+              <div className="flex items-center gap-1.5 px-2.5 py-1 bg-green-100 dark:bg-green-950/30 rounded-full">
+                <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse"></div>
+                <Wifi className="h-3.5 w-3.5 text-green-600 dark:text-green-400" aria-label="מחובר לניטור בזמן אמת" />
+              </div>
             ) : (
-              <WifiOff className="h-4 w-4 text-gray-400 dark:text-gray-500" aria-label="לא מחובר לניטור בזמן אמת" />
+              <div className="flex items-center gap-1.5 px-2.5 py-1 bg-gray-100 dark:bg-gray-800 rounded-full">
+                <WifiOff className="h-3.5 w-3.5 text-gray-400 dark:text-gray-500" aria-label="לא מחובר לניטור בזמן אמת" />
+              </div>
             )}
           </h1>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            ניטור וניהול אירועי אבטחה {wsConnected && <span className="text-green-600 dark:text-green-400">• בזמן אמת</span>}
+          <p className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-2">
+            <span>ניטור וניהול אירועי אבטחה</span>
+            {wsConnected && (
+              <span className="flex items-center gap-1 text-green-600 dark:text-green-400 font-medium">
+                <span className="h-1.5 w-1.5 bg-green-500 rounded-full animate-pulse"></span>
+                בזמן אמת
+              </span>
+            )}
           </p>
         </div>
         {activeTab === 'logs' && (
@@ -859,7 +913,7 @@ export function SOCPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 border-b border-gray-200 dark:border-[#1F1F1F]">
+      <div className="flex gap-1 border-b border-gray-200 dark:border-[#1F1F1F] overflow-x-auto">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           return (
@@ -867,10 +921,10 @@ export function SOCPage() {
               key={tab.id}
               onClick={() => setActiveTab(tab.id as any)}
               className={cn(
-                'flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px',
+                'flex items-center gap-2 px-4 py-3 text-sm font-medium transition-all duration-200 border-b-2 -mb-px whitespace-nowrap',
                 activeTab === tab.id
-                  ? 'border-black dark:border-white text-black dark:text-white'
-                  : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white'
+                  ? 'border-blue-600 dark:border-blue-400 text-blue-600 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-950/20'
+                  : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-[#1C1C1C]'
               )}
             >
               <Icon className="h-4 w-4" />
@@ -2148,21 +2202,21 @@ export function SOCPage() {
                   <CardDescription>רשימת כל הפעולות במערכת ({logs.length} רשומות)</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="overflow-x-auto">
+                  <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-[#1F1F1F]">
                     <table className="w-full">
-                      <thead>
-                        <tr className="border-b border-gray-200 dark:border-[#1F1F1F]">
-                          <th className="text-right px-4 py-3 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">תאריך/שעה</th>
-                          <th className="text-right px-4 py-3 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">פעולה</th>
-                          <th className="text-right px-4 py-3 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">מקור</th>
-                          <th className="text-right px-4 py-3 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">משתמש/בעל מפתח</th>
-                          <th className="text-right px-4 py-3 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">IP</th>
-                          <th className="text-right px-4 py-3 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">סטטוס</th>
-                          <th className="text-right px-4 py-3 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">זמן תגובה</th>
-                          <th className="text-right px-4 py-3 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">פרטים</th>
+                      <thead className="bg-gray-50 dark:bg-[#0A0A0A]">
+                        <tr>
+                          <th className="text-right px-4 py-3.5 text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b border-gray-200 dark:border-[#1F1F1F]">תאריך/שעה</th>
+                          <th className="text-right px-4 py-3.5 text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b border-gray-200 dark:border-[#1F1F1F]">פעולה</th>
+                          <th className="text-right px-4 py-3.5 text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b border-gray-200 dark:border-[#1F1F1F]">מקור</th>
+                          <th className="text-right px-4 py-3.5 text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b border-gray-200 dark:border-[#1F1F1F]">משתמש/בעל מפתח</th>
+                          <th className="text-right px-4 py-3.5 text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b border-gray-200 dark:border-[#1F1F1F]">IP</th>
+                          <th className="text-right px-4 py-3.5 text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b border-gray-200 dark:border-[#1F1F1F]">סטטוס</th>
+                          <th className="text-right px-4 py-3.5 text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b border-gray-200 dark:border-[#1F1F1F]">זמן תגובה</th>
+                          <th className="text-right px-4 py-3.5 text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b border-gray-200 dark:border-[#1F1F1F]">פרטים</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-gray-200 dark:divide-[#1F1F1F]" data-audit-logs-container>
+                      <tbody className="divide-y divide-gray-100 dark:divide-[#1F1F1F] bg-white dark:bg-[#080808]" data-audit-logs-container>
                         {logs.map((log) => {
                           const authMethod = log.authMethod || (log.apiKey ? 'API_KEY' : (log.userId ? 'JWT' : 'UNAUTHENTICATED'));
                           const isAPIKey = authMethod === 'API_KEY';
@@ -2173,36 +2227,42 @@ export function SOCPage() {
                               key={log.id}
                               data-log-id={log.id}
                               className={cn(
-                                "hover:bg-gray-50 dark:hover:bg-[#1C1C1C] transition-colors",
-                                log.isPinned && "bg-yellow-50 dark:bg-yellow-950/30 border-l-4 border-yellow-500 dark:border-yellow-400 shadow-sm"
+                                "hover:bg-gray-50 dark:hover:bg-[#1C1C1C] transition-colors duration-100 group",
+                                log.isPinned && "bg-gray-50 dark:bg-[#0F0F0F] border-l-4 border-gray-400 dark:border-gray-500"
                               )}
                             >
                               <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100 whitespace-nowrap">
                                 <div className="flex items-center gap-2">
                                   {log.isPinned && (
-                                    <div className="flex items-center gap-1 px-2 py-0.5 bg-yellow-500 dark:bg-yellow-600 text-white text-xs font-semibold rounded-full">
-                                      <Pin className="h-3 w-3" />
-                                      מוצמד
+                                    <div className="flex items-center gap-1 px-2.5 py-1 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs font-medium rounded border border-gray-200 dark:border-gray-700">
+                                      <Pin className="h-3 w-3 fill-current" />
+                                      <span>מוצמד</span>
                                     </div>
                                   )}
                                   <div>
-                                    <div className="font-medium">{new Date(log.createdAt).toLocaleDateString('he-IL')}</div>
-                                    <div className="text-xs text-gray-500 dark:text-gray-500">{new Date(log.createdAt).toLocaleTimeString('he-IL')}</div>
+                                    <div className="font-medium">
+                                      {new Date(log.createdAt).toLocaleDateString('he-IL')}
+                                    </div>
+                                    <div className="text-xs text-gray-500 dark:text-gray-500">
+                                      {new Date(log.createdAt).toLocaleTimeString('he-IL')}
+                                    </div>
                                   </div>
                                 </div>
                               </td>
                               <td className="px-4 py-3 text-sm">
                                 <div className="flex items-center gap-2 flex-wrap">
                                   {log.isPinned && (
-                                    <Pin className="h-4 w-4 text-yellow-600 dark:text-yellow-400 flex-shrink-0" title="רשומה מוצמדת" />
+                                    <Pin className="h-4 w-4 text-gray-600 dark:text-gray-400 flex-shrink-0 fill-current" title="רשומה מוצמדת" />
                                   )}
-                                  <span className={cn(
-                                    "font-medium",
-                                    log.isPinned ? "text-yellow-900 dark:text-yellow-200" : "text-black dark:text-white"
-                                  )}>{log.action}</span>
+                                  <span className="font-medium text-black dark:text-white">{log.action}</span>
                                   <span className="text-xs text-gray-500 dark:text-gray-500">{log.resource}</span>
                                   {log.httpMethod && log.httpPath && (
-                                    <span className="text-xs font-mono text-gray-400 dark:text-gray-600 bg-gray-100 dark:bg-[#1C1C1C] px-1.5 py-0.5 rounded">
+                                    <span className={cn(
+                                      "text-xs font-mono px-1.5 py-0.5 rounded",
+                                      log.isPinned 
+                                        ? "text-amber-800 dark:text-amber-200 bg-amber-100/50 dark:bg-amber-900/30" 
+                                        : "text-gray-400 dark:text-gray-600 bg-gray-100 dark:bg-[#1C1C1C]"
+                                    )}>
                                       {log.httpMethod} {log.httpPath}
                                     </span>
                                   )}
@@ -2287,20 +2347,20 @@ export function SOCPage() {
                                       size="sm"
                                       variant="ghost"
                                       onClick={() => handleUnpinLog(log.id)}
-                                      className="text-yellow-600 dark:text-yellow-400 hover:text-yellow-700 dark:hover:text-yellow-300 text-xs h-7"
+                                      className="text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/20 text-xs h-7 transition-colors"
                                       title="הסר הצמדה"
                                     >
-                                      <PinOff className="h-3 w-3" />
+                                      <PinOff className="h-3.5 w-3.5" />
                                     </Button>
                                   ) : (
                                     <Button
                                       size="sm"
                                       variant="ghost"
                                       onClick={() => handlePinLog(log.id)}
-                                      className="text-gray-600 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 text-xs h-7"
+                                      className="text-gray-500 dark:text-gray-500 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-amber-50/50 dark:hover:bg-amber-950/10 text-xs h-7 transition-colors"
                                       title="הצמד רשומה"
                                     >
-                                      <Pin className="h-3 w-3" />
+                                      <Pin className="h-3.5 w-3.5" />
                                     </Button>
                                   )}
                                   {(log.details?.correlationId || log.details?.queryParams || log.details?.requestBody || log.userAgent || log.requestSize || log.responseSize) ? (
@@ -2344,7 +2404,7 @@ export function SOCPage() {
                       if (!log) return null;
                       return (
                         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => setSelectedLogDetails(null)}>
-                          <div className="bg-white dark:bg-[#080808] border border-gray-200 dark:border-[#1F1F1F] rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
+                          <div className="bg-white dark:bg-[#080808] border border-gray-200 dark:border-[#1F1F1F] rounded-lg shadow-md w-full max-w-2xl max-h-[80vh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
                             <div className="flex items-center justify-between mb-4">
                               <h3 className="text-lg font-semibold text-black dark:text-white">פרטי הבקשה</h3>
                               <button

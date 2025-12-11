@@ -1044,11 +1044,11 @@ export function APIPage() {
       {/* Header */}
       <div className="space-y-2 mb-8">
         <div className="flex items-center gap-3">
-          <div className="p-3 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 dark:from-blue-600 dark:to-purple-700 shadow-lg">
-            <Key className="h-6 w-6 text-white" />
+          <div className="p-3 rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+            <Key className="h-6 w-6 text-gray-700 dark:text-gray-300" />
           </div>
           <div>
-            <h1 className="text-3xl font-bold tracking-tight text-black dark:text-white">
+            <h1 className="text-3xl font-semibold tracking-tight text-black dark:text-white">
               מפתחות API
             </h1>
             <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
@@ -1074,11 +1074,11 @@ export function APIPage() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-gradient-to-br from-purple-500 to-pink-600 dark:from-purple-600 dark:to-pink-700">
-                <Code className="h-5 w-5 text-white" />
+              <div className="p-2 rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+                <Code className="h-5 w-5 text-gray-700 dark:text-gray-300" />
               </div>
               <div>
-                <CardTitle className="text-lg">הדרכה לשימוש ב-API</CardTitle>
+                <CardTitle className="text-base font-medium">הדרכה לשימוש ב-API</CardTitle>
                 <CardDescription className="mt-1">
                   הוראות שימוש במפתחות API לגישה ל-API של המערכת
                 </CardDescription>
@@ -1120,7 +1120,7 @@ export function APIPage() {
                 </h3>
               </div>
               <div className="relative">
-                <div className="p-4 rounded-xl bg-gradient-to-br from-gray-50 to-gray-100 dark:from-[#0F0F0F] dark:to-[#1A1A1A] border-2 border-gray-200 dark:border-[#1F1F1F]">
+                <div className="p-4 rounded-lg bg-gray-50 dark:bg-[#0F0F0F] border border-gray-200 dark:border-[#1F1F1F]">
                   <code className="text-sm text-gray-900 dark:text-gray-100 font-mono select-all">
                     {baseURL}
                   </code>
@@ -1368,16 +1368,16 @@ export function APIPage() {
             </div>
 
             {/* Security Notice */}
-            <div className="p-5 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/30 border-2 border-amber-200 dark:border-amber-800">
+            <div className="p-5 rounded-lg bg-gray-50 dark:bg-[#0F0F0F] border border-gray-200 dark:border-[#1F1F1F]">
               <div className="flex items-start gap-3">
-                <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-900/50 shrink-0">
-                  <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                <div className="p-2 rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shrink-0">
+                  <AlertCircle className="h-5 w-5 text-gray-700 dark:text-gray-300" />
                 </div>
                 <div className="flex-1 space-y-2">
-                  <h4 className="text-sm font-bold text-amber-900 dark:text-amber-100">
+                  <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100">
                     התראת אבטחה חשובה
                   </h4>
-                  <ul className="text-xs text-amber-800 dark:text-amber-200 space-y-1.5 list-disc list-inside">
+                  <ul className="text-xs text-gray-700 dark:text-gray-300 space-y-1.5 list-disc list-inside">
                     <li><strong>המפתח מוצג פעם אחת בלבד</strong> - לאחר יצירתו, לא תוכל לראות אותו שוב</li>
                     <li><strong>שמור מיד</strong> - העתק את המפתח למקום מאובטח מיד לאחר יצירתו</li>
                     <li><strong>אם נחשף</strong> - מחק את המפתח מיד ויצור חדש</li>
@@ -1432,11 +1432,11 @@ export function APIPage() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-gradient-to-br from-green-500 to-teal-600 dark:from-green-600 dark:to-teal-700">
-                <BookOpen className="h-5 w-5 text-white" />
+              <div className="p-2 rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+                <BookOpen className="h-5 w-5 text-gray-700 dark:text-gray-300" />
               </div>
               <div>
-                <CardTitle className="text-lg">תיעוד API מלא</CardTitle>
+                <CardTitle className="text-base font-medium">תיעוד API מלא</CardTitle>
                 <CardDescription className="mt-1">
                   תיעוד מלא של כל ה-API endpoints הזמינים עבורך (תלוי בהרשאות)
                   {!permissionsLoading && visibleAPIGroups.length > 0 && (
@@ -1576,11 +1576,11 @@ export function APIPage() {
         <Card variant="elevated">
           <CardHeader>
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 dark:from-blue-600 dark:to-purple-700">
-                <Key className="h-5 w-5 text-white" />
+              <div className="p-2 rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+                <Key className="h-5 w-5 text-gray-700 dark:text-gray-300" />
               </div>
               <div>
-                <CardTitle className="text-lg">יצירת מפתח API חדש</CardTitle>
+                <CardTitle className="text-base font-medium">יצירת מפתח API חדש</CardTitle>
                 <CardDescription className="mt-1">
                   צור מפתח API חדש לגישה ל-API של המערכת
                 </CardDescription>
@@ -1606,7 +1606,7 @@ export function APIPage() {
               <Button 
                 type="submit" 
                 isLoading={isCreating} 
-                className="w-full sm:w-auto bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 shadow-lg hover:shadow-xl transition-all duration-200"
+                className="w-full sm:w-auto bg-black dark:bg-white text-white dark:text-black hover:bg-gray-900 dark:hover:bg-gray-100 font-medium"
                 size="lg"
               >
                 <Key className="h-4 w-4" />
@@ -1619,11 +1619,11 @@ export function APIPage() {
         <Card variant="elevated" className="border-blue-200 dark:border-blue-800/50">
           <CardHeader>
             <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-900/40 dark:to-indigo-900/40">
-                <Lock className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              <div className="p-2.5 rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+                <Lock className="h-5 w-5 text-gray-700 dark:text-gray-300" />
               </div>
               <div className="flex-1">
-                <CardTitle className="text-lg text-gray-900 dark:text-gray-100">
+                <CardTitle className="text-base font-medium text-gray-900 dark:text-gray-100">
                   יצירת מפתח API
                 </CardTitle>
                 <CardDescription className="mt-1 text-gray-600 dark:text-gray-400">
@@ -1633,17 +1633,11 @@ export function APIPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-blue-950/20 dark:via-indigo-950/20 dark:to-purple-950/20 border border-blue-200/50 dark:border-blue-800/30 p-6">
-              {/* Decorative background pattern */}
-              <div className="absolute inset-0 opacity-5 dark:opacity-10">
-                <div className="absolute top-0 left-0 w-32 h-32 bg-blue-500 rounded-full blur-3xl"></div>
-                <div className="absolute bottom-0 right-0 w-40 h-40 bg-indigo-500 rounded-full blur-3xl"></div>
-              </div>
-              
+            <div className="relative overflow-hidden rounded-lg bg-gray-50 dark:bg-[#0F0F0F] border border-gray-200 dark:border-[#1F1F1F] p-6">
               <div className="relative flex flex-col sm:flex-row items-start gap-5">
                 <div className="shrink-0">
-                  <div className="p-3 rounded-xl bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border border-blue-200/50 dark:border-blue-700/50 shadow-sm">
-                    <UserCog className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                  <div className="p-3 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+                    <UserCog className="h-6 w-6 text-gray-700 dark:text-gray-300" />
                   </div>
                 </div>
                 <div className="flex-1 min-w-0">
@@ -1686,16 +1680,16 @@ export function APIPage() {
       >
         <div className="space-y-6">
           {/* Warning Banner */}
-          <div className="relative p-4 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/30 border-2 border-amber-200 dark:border-amber-800">
+          <div className="relative p-4 rounded-lg bg-gray-50 dark:bg-[#0F0F0F] border border-gray-200 dark:border-[#1F1F1F]">
             <div className="flex items-start gap-3">
-              <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-900/50 shrink-0">
-                <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+              <div className="p-2 rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shrink-0">
+                <AlertCircle className="h-5 w-5 text-gray-700 dark:text-gray-300" />
               </div>
               <div className="flex-1">
-                <h3 className="font-semibold text-amber-900 dark:text-amber-100 mb-1">
+                <h3 className="font-medium text-gray-900 dark:text-gray-100 mb-1">
                   זהו הפעם היחידה שתראה את המפתח הזה!
                 </h3>
-                <p className="text-sm text-amber-800 dark:text-amber-200">
+                <p className="text-sm text-gray-700 dark:text-gray-300">
                   שמור את המפתח במקום בטוח. לאחר סגירת החלון, לא תוכל לראות אותו שוב.
                 </p>
               </div>
@@ -1774,7 +1768,7 @@ export function APIPage() {
               </div>
             </div>
             <div className="relative">
-              <div className="p-5 rounded-xl bg-gradient-to-br from-gray-50 to-gray-100 dark:from-[#0F0F0F] dark:to-[#1A1A1A] border-2 border-gray-200 dark:border-[#1F1F1F] shadow-inner">
+              <div className="p-5 rounded-lg bg-gray-50 dark:bg-[#0F0F0F] border border-gray-200 dark:border-[#1F1F1F]">
                 <code className="text-base font-mono text-gray-900 dark:text-gray-100 break-all block select-all leading-relaxed">
                   {createdKey?.key}
                 </code>
@@ -1833,7 +1827,7 @@ export function APIPage() {
             </Button>
             <Button
               onClick={handleCloseKeyModal}
-              className="gap-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+              className="gap-2 bg-black dark:bg-white text-white dark:text-black hover:bg-gray-900 dark:hover:bg-gray-100 font-medium"
             >
               <Check className="h-4 w-4" />
               שמרתי את המפתח
@@ -1846,11 +1840,11 @@ export function APIPage() {
       <Card variant="elevated">
         <CardHeader>
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-gradient-to-br from-orange-500 to-red-600 dark:from-orange-600 dark:to-red-700">
-              <Key className="h-5 w-5 text-white" />
+            <div className="p-2 rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+              <Key className="h-5 w-5 text-gray-700 dark:text-gray-300" />
             </div>
             <div>
-              <CardTitle className="text-lg">מפתחות API קיימים</CardTitle>
+              <CardTitle className="text-base font-medium">מפתחות API קיימים</CardTitle>
               <CardDescription className="mt-1">
                 רשימת כל מפתחות ה-API שלך
               </CardDescription>
@@ -1896,25 +1890,23 @@ export function APIPage() {
                 <div
                   key={key.id}
                   className={cn(
-                    'p-5 rounded-xl border-2 transition-all duration-200 hover:shadow-lg',
+                    'p-5 rounded-lg border transition-all duration-100',
                     isExpired(key.expiresAt)
-                      ? 'border-red-200 dark:border-red-900 bg-gradient-to-br from-red-50 to-red-100 dark:from-red-950/20 dark:to-red-900/10'
-                      : 'bg-gradient-to-br from-gray-50 to-white dark:from-[#262626] dark:to-[#1C1C1C] border-gray-200 dark:border-[#1F1F1F] hover:border-gray-300 dark:hover:border-[#404040]'
+                      ? 'border-red-200 dark:border-red-900 bg-gray-50 dark:bg-[#0F0F0F]'
+                      : 'bg-white dark:bg-[#080808] border-gray-200 dark:border-[#1F1F1F] hover:border-gray-300 dark:hover:border-[#404040]'
                   )}
                 >
                   <div className="flex items-start justify-between gap-4 mb-4">
                     <div className="flex items-center gap-3 flex-1">
                       <div className={cn(
-                        'p-2 rounded-lg',
+                        'p-2 rounded-lg border',
                         isExpired(key.expiresAt)
-                          ? 'bg-red-100 dark:bg-red-900/30'
-                          : 'bg-gradient-to-br from-blue-500 to-purple-600 dark:from-blue-600 dark:to-purple-700'
+                          ? 'bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700'
+                          : 'bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700'
                       )}>
                         <Key className={cn(
                           'h-4 w-4',
-                          isExpired(key.expiresAt)
-                            ? 'text-red-600 dark:text-red-400'
-                            : 'text-white'
+                          'text-gray-700 dark:text-gray-300'
                         )} />
                       </div>
                       <div className="flex-1 min-w-0">

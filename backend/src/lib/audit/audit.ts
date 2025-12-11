@@ -175,40 +175,72 @@ function getUserInfo(req: Request): {
   };
 }
 
+// Rate limiting: track concurrent audit log operations
+let activeAuditOperations = 0;
+const MAX_CONCURRENT_AUDIT_OPS = 10;
+const AUDIT_QUEUE: Array<{ data: AuditLogData; resolve: () => void; reject: (err: any) => void }> = [];
+
 /**
- * Create an audit log entry
+ * Process audit log queue
+ */
+async function processAuditQueue() {
+  if (activeAuditOperations >= MAX_CONCURRENT_AUDIT_OPS || AUDIT_QUEUE.length === 0) {
+    return;
+  }
+
+  const item = AUDIT_QUEUE.shift();
+  if (!item) return;
+
+  activeAuditOperations++;
+  try {
+    await createAuditLogInternal(item.data);
+    item.resolve();
+  } catch (error) {
+    item.reject(error);
+  } finally {
+    activeAuditOperations--;
+    // Process next item in queue
+    setImmediate(processAuditQueue);
+  }
+}
+
+/**
+ * Internal function to create audit log entry
  * Uses retry logic to handle Prisma panics gracefully
  */
-export async function createAuditLog(data: AuditLogData): Promise<void> {
+async function createAuditLogInternal(data: AuditLogData): Promise<void> {
   try {
     // Use retry logic to handle Prisma panics
     // Get fresh Prisma instance on each retry to ensure we use the recreated client
     await retryPrismaOperation(async () => {
       const currentPrisma = getPrismaClient(); // Always get current instance
       // Build data object, only including fields that exist in the schema
-      const auditData: any = {
-          userId: data.userId,
-          userEmail: data.userEmail,
-        apiKeyId: data.apiKeyId,
-          action: data.action,
-          resource: data.resource,
-          resourceId: data.resourceId,
-          details: data.details ? JSON.stringify(data.details) : null,
-          ipAddress: data.ipAddress,
-          userAgent: data.userAgent,
-          status: data.status,
-          errorMessage: data.errorMessage,
-          priority: data.priority,
-          incidentStatus: data.incidentStatus,
-      };
-
-      // Only add new fields if they exist (for backward compatibility during migration)
-      // These fields were added in the migration but Prisma Client might not be regenerated yet
-      if (data.httpMethod !== undefined) auditData.httpMethod = data.httpMethod;
-      if (data.httpPath !== undefined) auditData.httpPath = data.httpPath;
-      if (data.requestSize !== undefined) auditData.requestSize = data.requestSize;
-      if (data.responseSize !== undefined) auditData.responseSize = data.responseSize;
-      if (data.responseTime !== undefined) auditData.responseTime = data.responseTime;
+      // Filter out undefined values to avoid Prisma issues
+      const auditData: any = {};
+      
+      // Required fields
+      auditData.action = data.action;
+      auditData.resource = data.resource;
+      auditData.status = data.status;
+      
+      // Optional fields - only add if defined
+      if (data.userId !== undefined && data.userId !== null) auditData.userId = data.userId;
+      if (data.userEmail !== undefined && data.userEmail !== null) auditData.userEmail = data.userEmail;
+      if (data.apiKeyId !== undefined && data.apiKeyId !== null) auditData.apiKeyId = data.apiKeyId;
+      if (data.resourceId !== undefined && data.resourceId !== null) auditData.resourceId = data.resourceId;
+      if (data.details !== undefined && data.details !== null) {
+        auditData.details = typeof data.details === 'string' ? data.details : JSON.stringify(data.details);
+      }
+      if (data.ipAddress !== undefined && data.ipAddress !== null) auditData.ipAddress = data.ipAddress;
+      if (data.userAgent !== undefined && data.userAgent !== null) auditData.userAgent = data.userAgent;
+      if (data.errorMessage !== undefined && data.errorMessage !== null) auditData.errorMessage = data.errorMessage;
+      if (data.priority !== undefined && data.priority !== null) auditData.priority = data.priority;
+      if (data.incidentStatus !== undefined && data.incidentStatus !== null) auditData.incidentStatus = data.incidentStatus;
+      if (data.httpMethod !== undefined && data.httpMethod !== null) auditData.httpMethod = data.httpMethod;
+      if (data.httpPath !== undefined && data.httpPath !== null) auditData.httpPath = data.httpPath;
+      if (data.requestSize !== undefined && data.requestSize !== null) auditData.requestSize = data.requestSize;
+      if (data.responseSize !== undefined && data.responseSize !== null) auditData.responseSize = data.responseSize;
+      if (data.responseTime !== undefined && data.responseTime !== null) auditData.responseTime = data.responseTime;
 
       // Auto-pin important operations (only for successful operations from this week)
       const shouldAutoPin = shouldAutoPinLog(data);
@@ -221,7 +253,11 @@ export async function createAuditLog(data: AuditLogData): Promise<void> {
         auditData.isPinned = data.isPinned;
         if (data.isPinned) {
           auditData.pinnedAt = new Date();
-          auditData.pinnedBy = data.pinnedBy;
+          if (data.pinnedBy !== undefined && data.pinnedBy !== null) {
+            auditData.pinnedBy = data.pinnedBy;
+          } else {
+            auditData.pinnedBy = null;
+          }
         }
       }
 
@@ -247,6 +283,29 @@ export async function createAuditLog(data: AuditLogData): Promise<void> {
         httpPath: data.httpPath,
       });
     }
+  }
+}
+
+/**
+ * Create an audit log entry
+ * Uses queue to prevent too many concurrent operations
+ */
+export async function createAuditLog(data: AuditLogData): Promise<void> {
+  // If we're under the limit, process immediately
+  if (activeAuditOperations < MAX_CONCURRENT_AUDIT_OPS) {
+    activeAuditOperations++;
+    try {
+      await createAuditLogInternal(data);
+    } finally {
+      activeAuditOperations--;
+      processAuditQueue();
+    }
+  } else {
+    // Queue the operation
+    return new Promise<void>((resolve, reject) => {
+      AUDIT_QUEUE.push({ data, resolve, reject });
+      processAuditQueue();
+    });
   }
 }
 

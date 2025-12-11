@@ -261,8 +261,8 @@ export function TracksManagement() {
             placeholder="תיאור אופציונלי"
           />
           {errors.submit && (
-            <div className="p-3 rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900">
-              <p className="text-sm text-red-600 dark:text-red-400">{errors.submit}</p>
+            <div className="p-3 rounded-lg bg-gray-50 dark:bg-[#0F0F0F] border border-gray-200 dark:border-[#1F1F1F]">
+              <p className="text-sm text-gray-700 dark:text-gray-300">{errors.submit}</p>
             </div>
           )}
           <div className="flex items-center justify-end gap-2 pt-4 border-t border-gray-200 dark:border-[#1F1F1F]">
@@ -276,10 +276,16 @@ export function TracksManagement() {
                 setFormData({ name: '', description: '' });
                 setErrors({});
               }}
+              className="font-medium"
             >
               ביטול
             </Button>
-            <Button type="submit">{selectedTrack ? 'שמור שינויים' : 'הוסף מגמה'}</Button>
+            <Button 
+              type="submit"
+              className="bg-black dark:bg-white text-white dark:text-black hover:bg-gray-900 dark:hover:bg-gray-100 font-medium"
+            >
+              {selectedTrack ? 'שמור שינויים' : 'הוסף מגמה'}
+            </Button>
           </div>
         </form>
       </Modal>

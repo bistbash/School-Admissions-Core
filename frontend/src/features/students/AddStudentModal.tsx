@@ -535,15 +535,17 @@ export function AddStudentModal({ isOpen, onClose, onSuccess, cohorts }: AddStud
     >
       <form onSubmit={handleSubmit} className="space-y-6">
         <Tabs defaultValue="basic" className="w-full">
-          <TabsList className="w-full justify-start">
-            <TabsTrigger value="basic">פרטים בסיסיים</TabsTrigger>
-            <TabsTrigger value="academic">פרטים אקדמיים</TabsTrigger>
-            <TabsTrigger value="address">פרטי מגורים</TabsTrigger>
-            <TabsTrigger value="parents">פרטי הורים</TabsTrigger>
-          </TabsList>
+          <div className="border-b border-gray-200 dark:border-[#1F1F1F] mb-4">
+            <TabsList className="w-full justify-start bg-transparent h-auto p-0 gap-0">
+              <TabsTrigger value="basic" className="px-4 py-3 font-medium text-sm">פרטים בסיסיים</TabsTrigger>
+              <TabsTrigger value="academic" className="px-4 py-3 font-medium text-sm">פרטים אקדמיים</TabsTrigger>
+              <TabsTrigger value="address" className="px-4 py-3 font-medium text-sm">פרטי מגורים</TabsTrigger>
+              <TabsTrigger value="parents" className="px-4 py-3 font-medium text-sm">פרטי הורים</TabsTrigger>
+            </TabsList>
+          </div>
 
           {/* Basic Information Tab */}
-          <TabsContent value="basic" className="space-y-4">
+          <TabsContent value="basic" className="space-y-4 mt-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Input
                 label="מספר ת.ז *"
@@ -600,7 +602,7 @@ export function AddStudentModal({ isOpen, onClose, onSuccess, cohorts }: AddStud
           </TabsContent>
 
           {/* Academic Information Tab */}
-          <TabsContent value="academic" className="space-y-4">
+          <TabsContent value="academic" className="space-y-4 mt-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Select
                 label="כיתה"
@@ -722,12 +724,12 @@ export function AddStudentModal({ isOpen, onClose, onSuccess, cohorts }: AddStud
                   placeholder="הזן מחזור (שנה או גימטריה)"
                 />
                 {showCohortSuggestions && cohortSuggestions.length > 0 && (
-                  <div className="cohort-suggestions absolute z-10 w-full mt-1 bg-white dark:bg-[#080808] border border-gray-200 dark:border-[#1F1F1F] rounded-lg shadow-lg max-h-48 overflow-auto animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="cohort-suggestions absolute z-10 w-full mt-1 bg-white dark:bg-[#080808] border border-gray-200 dark:border-[#1F1F1F] rounded-lg shadow-md max-h-48 overflow-auto animate-in fade-in slide-in-from-top-2 duration-100">
                     {cohortSuggestions.map((suggestion, index) => (
                       <button
                         key={index}
                         type="button"
-                        className="w-full text-right px-3 py-2 hover:bg-gray-100 dark:hover:bg-[#1F1F1F] text-sm transition-colors duration-150"
+                        className="w-full text-right px-3 py-2 hover:bg-gray-100 dark:hover:bg-[#1F1F1F] text-sm transition-colors duration-100 focus:bg-gray-100 dark:focus:bg-[#1F1F1F] focus:outline-none"
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
@@ -755,7 +757,7 @@ export function AddStudentModal({ isOpen, onClose, onSuccess, cohorts }: AddStud
           </TabsContent>
 
           {/* Address Information Tab */}
-          <TabsContent value="address" className="space-y-4">
+          <TabsContent value="address" className="space-y-4 mt-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Input
                 label="יישוב"
@@ -810,7 +812,7 @@ export function AddStudentModal({ isOpen, onClose, onSuccess, cohorts }: AddStud
           </TabsContent>
 
           {/* Parents Information Tab */}
-          <TabsContent value="parents" className="space-y-6">
+          <TabsContent value="parents" className="space-y-6 mt-4">
             {/* Parent 1 */}
             <div className="space-y-4">
               <h4 className="text-sm font-semibold text-black dark:text-white border-b border-gray-200 dark:border-[#1F1F1F] pb-2">
@@ -930,8 +932,8 @@ export function AddStudentModal({ isOpen, onClose, onSuccess, cohorts }: AddStud
         </Tabs>
 
         {errors.submit && (
-          <div className="p-3 rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900">
-            <p className="text-sm text-red-600 dark:text-red-400">{errors.submit}</p>
+          <div className="p-3 rounded-lg bg-gray-50 dark:bg-[#0F0F0F] border border-gray-200 dark:border-[#1F1F1F]">
+            <p className="text-sm text-gray-700 dark:text-gray-300">{errors.submit}</p>
           </div>
         )}
 
@@ -941,6 +943,7 @@ export function AddStudentModal({ isOpen, onClose, onSuccess, cohorts }: AddStud
             variant="outline"
             onClick={handleClose}
             disabled={isSubmitting}
+            className="font-medium"
           >
             ביטול
           </Button>
@@ -948,6 +951,7 @@ export function AddStudentModal({ isOpen, onClose, onSuccess, cohorts }: AddStud
             type="submit"
             isLoading={isSubmitting}
             disabled={isSubmitting}
+            className="bg-black dark:bg-white text-white dark:text-black hover:bg-gray-900 dark:hover:bg-gray-100 font-medium"
           >
             הוסף תלמיד
           </Button>

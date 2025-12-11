@@ -33,7 +33,7 @@ export function TabsList({ children, className }: TabsListProps) {
   return (
     <div
       className={cn(
-        'inline-flex h-9 items-center justify-start rounded-lg bg-gray-100 dark:bg-[#0F0F0F] p-1 text-gray-600 dark:text-gray-400',
+        'inline-flex h-auto items-center justify-start',
         className
       )}
     >
@@ -60,11 +60,11 @@ export function TabsTrigger({ value, children, className }: TabsTriggerProps) {
       type="button"
       onClick={() => setActiveTab(value)}
       className={cn(
-        'inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium transition-all',
+        'inline-flex items-center justify-center whitespace-nowrap px-4 py-3 text-sm font-medium transition-colors duration-100 border-b-2 relative',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2',
         isActive
-          ? 'bg-white dark:bg-[#1A1A1A] text-black dark:text-white shadow-sm'
-          : 'text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white',
+          ? 'text-black dark:text-white border-black dark:border-white'
+          : 'text-gray-500 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 border-transparent',
         className
       )}
     >

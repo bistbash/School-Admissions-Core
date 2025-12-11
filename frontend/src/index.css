@@ -76,8 +76,105 @@
     letter-spacing: -0.01em;
   }
 
+  /* Performance optimizations */
+  * {
+    will-change: auto;
+  }
+
+  /* Optimize animations for performance */
+  @media (prefers-reduced-motion: no-preference) {
+    .animate-in,
+    .animate-slide-up {
+      will-change: transform, opacity;
+    }
+  }
+
+  /* Respect reduced motion preference */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
   html {
     @apply scroll-smooth;
+  }
+
+  /* Mobile safe area support */
+  @supports (padding: env(safe-area-inset-bottom)) {
+    body {
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+  }
+
+  /* Mobile app-like touch optimizations */
+  @media (max-width: 1024px) {
+    * {
+      -webkit-tap-highlight-color: transparent;
+    }
+    
+    button, a {
+      touch-action: manipulation;
+      min-height: 44px; /* iOS recommended touch target */
+      min-width: 44px;
+    }
+
+    /* App-like card shadows on mobile */
+    .card-mobile {
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+    }
+
+    .dark .card-mobile {
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2), 0 1px 2px rgba(0, 0, 0, 0.15);
+    }
+
+    /* Smooth scrolling like native apps */
+    body {
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior-y: contain;
+    }
+
+    /* App-like page transitions */
+    main {
+      animation: slideIn 0.15s ease-out;
+    }
+
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateY(4px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* Hide scrollbar but keep functionality */
+    .scrollbar-hide {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+
+    .scrollbar-hide::-webkit-scrollbar {
+      display: none;
+    }
+
+    /* Better text rendering on mobile */
+    body {
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      text-rendering: optimizeLegibility;
+    }
+
+    /* Improve touch feedback */
+    button:active, a:active {
+      opacity: 0.7;
+    }
   }
 }
 
@@ -87,11 +184,11 @@
   }
 
   .animate-in {
-    animation: fadeIn 0.2s ease-in-out;
+    animation: fadeIn 0.1s ease-out;
   }
 
   .animate-slide-up {
-    animation: slideUp 0.3s ease-out;
+    animation: slideUp 0.15s ease-out;
   }
 
   .glass {
@@ -169,12 +266,28 @@
 
 @keyframes slideUp {
   from {
-    transform: translateY(10px);
+    transform: translateY(100%);
     opacity: 0;
   }
   to {
     transform: translateY(0);
     opacity: 1;
+  }
+}
+
+/* Mobile-specific slide up for modals */
+@keyframes slideUpMobile {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 640px) {
+  .animate-slide-up {
+    animation: slideUpMobile 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   }
 }
 
@@ -207,7 +320,7 @@ body.search-open {
 
 body.search-open #root {
   filter: blur(4px);
-  transition: filter 0.3s ease-out;
+  transition: filter 0.15s ease-out;
 }
 
 /* Search modal is rendered as portal outside #root, so it won't be blurred */

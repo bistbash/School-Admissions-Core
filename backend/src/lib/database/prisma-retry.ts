@@ -28,16 +28,30 @@ export async function retryPrismaOperation<T>(
       if (error.name === 'PrismaClientRustPanicError' || error instanceof PrismaClientRustPanicError) {
         if (attempt < maxRetries - 1) {
           // Recreate Prisma Client on panic
-          logger.warn({ attempt: attempt + 1, maxRetries }, 'Prisma panic detected, recreating client...');
+          const correlationId = (error as any).correlationId || 'unknown';
+          logger.warn({ 
+            attempt: attempt + 1, 
+            maxRetries,
+            correlationId 
+          }, 'Prisma panic detected, recreating client...');
+          
           try {
             await recreatePrisma();
+            logger.warn({ correlationId }, 'Prisma Client recreated after panic');
           } catch (recreateError: any) {
-            logger.error({ error: recreateError.message }, 'Failed to recreate Prisma Client');
+            logger.error({ 
+              error: recreateError.message,
+              correlationId 
+            }, 'Failed to recreate Prisma Client');
+            // Still continue with retry even if recreation failed
           }
           
           // Exponential backoff: 200ms, 400ms, 800ms, etc.
           const delay = baseDelay * Math.pow(2, attempt);
-          logger.debug({ delay }, 'Retrying Prisma operation...');
+          logger.debug({ 
+            delay,
+            correlationId 
+          }, 'Retrying Prisma operation...');
           await new Promise(resolve => setTimeout(resolve, delay));
           continue;
         }

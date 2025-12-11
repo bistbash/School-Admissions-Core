@@ -70,14 +70,21 @@ async function recreatePrismaClient(): Promise<PrismaClient> {
   // Note: Use $queryRaw instead of $executeRaw for PRAGMA statements in SQLite
   // because PRAGMA returns results and $executeRaw doesn't allow results
   try {
+    // Use sequential execution to avoid race conditions
     await client.$queryRaw`PRAGMA journal_mode = WAL;`;
     await client.$queryRaw`PRAGMA busy_timeout = 30000;`;
     await client.$queryRaw`PRAGMA synchronous = NORMAL;`;
     await client.$queryRaw`PRAGMA cache_size = -64000;`;
     await client.$queryRaw`PRAGMA foreign_keys = ON;`;
+    // Add connection pool settings to reduce panics
+    await client.$queryRaw`PRAGMA temp_store = MEMORY;`;
+    await client.$queryRaw`PRAGMA mmap_size = 268435456;`; // 256MB
   } catch (error) {
     logger.warn({ error: (error as Error).message }, 'Failed to configure SQLite PRAGMA settings after recreation');
   }
+
+  // Wait a bit to ensure the client is fully initialized
+  await new Promise(resolve => setTimeout(resolve, 100));
 
   globalForPrisma.prisma = client;
   logger.warn('Prisma Client recreated after panic');
