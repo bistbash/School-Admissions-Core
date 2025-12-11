@@ -33,6 +33,8 @@ interface Student {
 interface StudentsTableProps {
   students: Student[];
   onRefresh: () => void;
+  onEdit?: (studentId: number) => void;
+  onView?: (studentId: number) => void;
 }
 
 const statusLabels: Record<string, string> = {
@@ -49,7 +51,7 @@ const statusColors: Record<string, string> = {
   ARCHIVED: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400 border border-gray-200 dark:border-gray-700',
 };
 
-export function StudentsTable({ students, onRefresh }: StudentsTableProps) {
+export function StudentsTable({ students, onRefresh, onEdit, onView }: StudentsTableProps) {
   const { mode } = usePageMode();
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
 
@@ -185,6 +187,24 @@ export function StudentsTable({ students, onRefresh }: StudentsTableProps) {
                             <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">ת.ז</p>
                             <p className="text-sm font-mono font-medium text-black dark:text-white">{student.idNumber}</p>
                           </div>
+                          <div className="p-3 rounded-lg bg-white dark:bg-[#0A0A0A] border border-gray-200 dark:border-[#1F1F1F]">
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">שם פרטי</p>
+                            <p className="text-sm font-medium text-black dark:text-white">{student.firstName}</p>
+                          </div>
+                          <div className="p-3 rounded-lg bg-white dark:bg-[#0A0A0A] border border-gray-200 dark:border-[#1F1F1F]">
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">שם משפחה</p>
+                            <p className="text-sm font-semibold text-black dark:text-white">{student.lastName}</p>
+                          </div>
+                          <div className="p-3 rounded-lg bg-white dark:bg-[#0A0A0A] border border-gray-200 dark:border-[#1F1F1F]">
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">מין</p>
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700">
+                              {student.gender === 'MALE' ? 'זכר' : 'נקבה'}
+                            </span>
+                          </div>
+                          <div className="p-3 rounded-lg bg-white dark:bg-[#0A0A0A] border border-gray-200 dark:border-[#1F1F1F]">
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">כיתה</p>
+                            <p className="text-sm font-medium text-black dark:text-white">{getCurrentClass(student)}</p>
+                          </div>
                           {student.cohort && (
                             <div className="p-3 rounded-lg bg-white dark:bg-[#0A0A0A] border border-gray-200 dark:border-[#1F1F1F]">
                               <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">מחזור</p>
@@ -214,32 +234,28 @@ export function StudentsTable({ students, onRefresh }: StudentsTableProps) {
                           </div>
                         </div>
                         <div className="flex items-center gap-2 pt-2 border-t border-gray-200 dark:border-[#1F1F1F]">
-                          {mode === 'edit' && (
+                          {mode === 'edit' && onEdit && (
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => {
-                                // TODO: Implement edit functionality
-                                console.log('Edit student', student.id);
-                              }}
+                              onClick={() => onEdit(student.id)}
                               className="gap-2"
                             >
                               <Edit className="h-3.5 w-3.5" />
                               ערוך
                             </Button>
                           )}
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              // TODO: Implement view details functionality
-                              console.log('View student', student.id);
-                            }}
-                            className="gap-2"
-                          >
-                            <Eye className="h-3.5 w-3.5" />
-                            צפה בפרטים
-                          </Button>
+                          {onView && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => onView(student.id)}
+                              className="gap-2"
+                            >
+                              <Eye className="h-3.5 w-3.5" />
+                              צפה בפרטים
+                            </Button>
+                          )}
                         </div>
                       </div>
                     </td>

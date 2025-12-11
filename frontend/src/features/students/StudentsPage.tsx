@@ -8,6 +8,8 @@ import { apiClient } from '../../shared/lib/api';
 import { AddStudentModal } from './AddStudentModal';
 import { UploadExcelModal } from './UploadExcelModal';
 import { StudentsTable } from './StudentsTable';
+import { EditStudentModal } from './EditStudentModal';
+import { ViewStudentModal } from './ViewStudentModal';
 import { TracksManagement } from './TracksManagement';
 import { CohortsManagement } from './CohortsManagement';
 import { Select } from '../../shared/ui/Select';
@@ -56,6 +58,9 @@ export function StudentsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  const [selectedStudentId, setSelectedStudentId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filters, setFilters] = useState({
     status: '',
@@ -143,6 +148,22 @@ export function StudentsPage() {
 
   const handleUploadComplete = () => {
     setIsUploadModalOpen(false);
+    loadStudents();
+  };
+
+  const handleEditStudent = (studentId: number) => {
+    setSelectedStudentId(studentId);
+    setIsEditModalOpen(true);
+  };
+
+  const handleViewStudent = (studentId: number) => {
+    setSelectedStudentId(studentId);
+    setIsViewModalOpen(true);
+  };
+
+  const handleEditSuccess = () => {
+    setIsEditModalOpen(false);
+    setSelectedStudentId(null);
     loadStudents();
   };
 
@@ -712,6 +733,8 @@ export function StudentsPage() {
                 <StudentsTable
                   students={filteredStudents}
                   onRefresh={loadStudents}
+                  onEdit={handleEditStudent}
+                  onView={handleViewStudent}
                 />
               )}
             </CardContent>
@@ -740,6 +763,24 @@ export function StudentsPage() {
         isOpen={isUploadModalOpen}
         onClose={() => setIsUploadModalOpen(false)}
         onSuccess={handleUploadComplete}
+      />
+      <EditStudentModal
+        isOpen={isEditModalOpen}
+        onClose={() => {
+          setIsEditModalOpen(false);
+          setSelectedStudentId(null);
+        }}
+        onSuccess={handleEditSuccess}
+        studentId={selectedStudentId}
+        cohorts={cohorts}
+      />
+      <ViewStudentModal
+        isOpen={isViewModalOpen}
+        onClose={() => {
+          setIsViewModalOpen(false);
+          setSelectedStudentId(null);
+        }}
+        studentId={selectedStudentId}
       />
       </div>
     </PageWrapper>
